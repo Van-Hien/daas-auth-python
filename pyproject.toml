@@ -1,0 +1,71 @@
+[project]
+name = "daas-auth"
+version = "0.1.0"
+description = "OAuth2 auth service for DESIGN DaaS, drop-in replacement for the PHP backend"
+readme = "README.md"
+authors = [
+    { name = "Van-Hien", email = "hien.van.986@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.20.1",
+    "authlib>=1.9.1",
+    "bcrypt>=5.0.0",
+    "fastapi>=0.162.0",
+    "pydantic-settings>=2.16.1",
+    "pymysql>=1.2.3",
+    "sqlalchemy>=2.1.6",
+    "typer>=0.27.3",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+daas-auth = "daas_auth:main"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "import-linter>=2.15",
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "ruff>=0.17.2",
+]
+
+
+[tool.mypy]
+# Any function need type annotations, and nothing is silently typed as Any.
+strict = true
+
+[tool.ruff.lint]
+# ruff's defaults, plus the security group (S).
+# S608: no SQL built from strings
+extend-select = ["S"]
+
+[tool.ruff.lint.per-file-ignores]
+# Switch off S101 for tests, because S101 forbids "assert". But tests use "assert".
+"tests/**" = ["S101"]
+
+[tool.pytest]
+testpaths = ["tests"]
+# Add options
+# "-ra": Short summary
+# "--import-mode=importlib": pytest does not change Python's import path
+addopts = ["-ra", "--import-mode=importlib"]
+# Turn typos into error
+strict = true
+
+[tool.importlinter]
+root_package = "daas_auth"
+
+# First contract
+[[tool.importlinter.contracts]]
+name = "daas_auth.domain does not import daas_auth.api"
+type = "forbidden"
+source_modules = ["daas_auth.domain"]
+forbidden_modules = ["daas_auth.api"]
+
+
