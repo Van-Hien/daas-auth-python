@@ -18,6 +18,7 @@ var/
 # Secrets: never commit these
 .env
 .env.db
+.env.migrate
 *.pem
 *.key
 *.har
