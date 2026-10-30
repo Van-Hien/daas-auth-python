@@ -57,6 +57,10 @@ testpaths = ["tests"]
 addopts = ["-ra", "--import-mode=importlib"]
 # Turn typos into error
 strict = true
+# Labels for tests. With strict = true, an unregistered one is an error.
+markers = [
+    "mariadb: needs the MariaDB container (docker compose up -d); skipped when it is not running",
+]
 
 [tool.importlinter]
 root_package = "daas_auth"
