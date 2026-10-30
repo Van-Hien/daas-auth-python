@@ -1,0 +1,27 @@
+# MariaDB for daas-auth. Same version as PHP's database, reachable only from this host.
+name: daas-auth     # container name: daas-auth-mariadb-1
+
+services:
+  mariadb:
+    image: mariadb:10.11.6
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3318:3306"
+    env_file: .env.db    # the DB passwords; .env is for the service itself
+    environment:
+      MARIADB_DATABASE: daas_auth
+    command:
+      - --sql-mode=STRICT_ALL_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_bin
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./docker/mariadb/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  mariadb-data:
