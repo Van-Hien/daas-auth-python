@@ -3,6 +3,7 @@ The tables as Python classes (SQLAlchemy ORM), matching migration head
 """
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
@@ -31,6 +32,13 @@ NAMING_CONVENTION = {
 
 ID = BigInteger().with_variant(Integer(), "sqlite")
 TIMESTAMP = DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql", "mariadb")
+# PHP's table options (schema.sql), for every new table. SQLite ignores mysql_ options.
+MYSQL: dict[str, Any] = {
+    "mysql_engine": "InnoDB",
+    "mysql_charset": "utf8mb4",
+    "mysql_collate": "utf8mb4_bin",
+    "mysql_row_format": "DYNAMIC",
+}
 
 
 class Base(DeclarativeBase):
@@ -56,7 +64,11 @@ class User(Audited, Base):
     __table_args__ = (
         Index("guid_idx", "guid"),
         Index("registration_idx", "email", "registration_code"),
-        {"sqlite_autoincrement": True},  # an id is never given out twice (h)
+        {
+            # an id is never given out twice (h)
+            "sqlite_autoincrement": True,
+            **MYSQL,
+        },
     )
 
     id: Mapped[int] = mapped_column(ID, primary_key=True)
@@ -73,6 +85,7 @@ class User(Audited, Base):
 
 class UserGroup(Audited, Base):
     __tablename__ = "user_groups"
+    __table_args__ = MYSQL
 
     id: Mapped[int] = mapped_column(ID, primary_key=True)
     description: Mapped[str] = mapped_column(String(255))
@@ -80,6 +93,7 @@ class UserGroup(Audited, Base):
 
 class UserToUserGroup(Audited, Base):
     __tablename__ = "users_to_user_groups"
+    __table_args__ = MYSQL
 
     user_id: Mapped[int] = mapped_column(
         ID, ForeignKey("users.id"), primary_key=True, index=True
@@ -91,6 +105,7 @@ class UserToUserGroup(Audited, Base):
 
 class Desktop(Audited, Base):
     __tablename__ = "desktops"
+    __table_args__ = MYSQL
 
     id: Mapped[int] = mapped_column(ID, primary_key=True)
     description: Mapped[str] = mapped_column(String(255))
@@ -98,6 +113,7 @@ class Desktop(Audited, Base):
 
 class DesktopGroup(Audited, Base):
     __tablename__ = "desktop_groups"
+    __table_args__ = MYSQL
 
     id: Mapped[int] = mapped_column(ID, primary_key=True)
     description: Mapped[str] = mapped_column(String(255))
@@ -105,6 +121,7 @@ class DesktopGroup(Audited, Base):
 
 class DesktopToDesktopGroup(Audited, Base):
     __tablename__ = "desktops_to_desktop_groups"
+    __table_args__ = MYSQL
 
     desktop_id: Mapped[int] = mapped_column(
         ID, ForeignKey("desktops.id"), primary_key=True, index=True
@@ -116,6 +133,7 @@ class DesktopToDesktopGroup(Audited, Base):
 
 class DesktopGroupUserGroup(Audited, Base):
     __tablename__ = "desktopgroup_usergroup"
+    __table_args__ = MYSQL
 
     desktopgroup_id: Mapped[int] = mapped_column(
         ID,
@@ -133,6 +151,7 @@ class DesktopGroupUserGroup(Audited, Base):
 
 class OAuth2Client(Audited, Base):
     __tablename__ = "oauth2_clients"
+    __table_args__ = MYSQL
 
     identifier: Mapped[str] = mapped_column(String(200), primary_key=True)
     version: Mapped[int] = mapped_column(Integer, server_default=text("1"))
@@ -142,3 +161,25 @@ class OAuth2Client(Audited, Base):
     )  # JSON text, as in PHP
     is_confidential: Mapped[bool] = mapped_column(Boolean)
     secret: Mapped[str | None] = mapped_column(String(200))
+
+
+class Role(Audited, Base):
+    __tablename__ = "roles"
+    __table_args__ = MYSQL
+
+    id: Mapped[int] = mapped_column(ID, primary_key=True)
+    name: Mapped[str] = mapped_column(String(16), unique=True)
+
+
+class UserRole(Audited, Base):
+    """
+    System-versioned on MariaDB (0003): every old version of a row is kept.
+    """
+
+    __tablename__ = "user_roles"
+    __table_args__ = MYSQL
+
+    user_id: Mapped[int] = mapped_column(ID, ForeignKey("users.id"), primary_key=True)
+    role_id: Mapped[int] = mapped_column(
+        ID, ForeignKey("roles.id"), primary_key=True, index=True
+    )
