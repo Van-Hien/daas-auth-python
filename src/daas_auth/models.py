@@ -77,7 +77,6 @@ class User(Audited, Base):
     email: Mapped[str] = mapped_column(String(255))
     password: Mapped[str] = mapped_column(String(255))  # a hash, never the password
     enabled: Mapped[bool] = mapped_column(Boolean(), server_default=text("0"))
-    role: Mapped[str] = mapped_column(String(16))
     registration_code: Mapped[str | None] = mapped_column(String(8))
     registration_code_timeout: Mapped[datetime | None] = mapped_column(DateTime)
     registration_used_moment: Mapped[datetime | None] = mapped_column(DateTime)
