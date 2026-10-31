@@ -19,6 +19,7 @@ var/
 .env
 .env.db
 .env.migrate
+.env.import
 *.pem
 *.key
 *.har

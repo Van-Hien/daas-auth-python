@@ -1,10 +1,10 @@
 """The connection to the database. Built once, at startup."""
 
 import sqlalchemy as sa
-from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine import Connection, Engine, URL
 
 
-def make_engine(database_url: str) -> Engine:
+def make_engine(database_url: str | URL) -> Engine:
     # pool_pre_ping: test a pooled connection before use, so a restarted
     # MariaDB costs one retry instead of an error for the caller.
     return sa.create_engine(database_url, pool_pre_ping=True)

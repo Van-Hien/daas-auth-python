@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-daas-auth = "daas_auth:main"
+daas-auth = "daas_auth.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.12.23,<0.13.0"]
