@@ -1,8 +1,8 @@
 from typing import Annotated
 
-from sqlalchemy import URL
 from pydantic import SecretStr, StringConstraints
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL
 
 
 class Settings(BaseSettings):
@@ -81,4 +81,3 @@ class ImportSettings(BaseSettings):
 
 def load_import_settings() -> ImportSettings:
     return ImportSettings()  # type: ignore[call-arg]
-    

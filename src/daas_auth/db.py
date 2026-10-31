@@ -1,7 +1,7 @@
 """The connection to the database. Built once, at startup."""
 
 import sqlalchemy as sa
-from sqlalchemy.engine import Connection, Engine, URL
+from sqlalchemy.engine import URL, Connection, Engine
 
 
 def make_engine(database_url: str | URL) -> Engine:

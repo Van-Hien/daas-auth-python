@@ -4,10 +4,20 @@ The tables as Python classes (SQLAlchemy ORM), matching migration head
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, MetaData, String, Text, text
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    MetaData,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects import mysql
-
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Every key, index and constraint gets a name built from these patterns, so a
 # later migration can drop it by that name, on MariaDB and on SQLite alike.
@@ -20,11 +30,28 @@ NAMING_CONVENTION = {
 }
 
 ID = BigInteger().with_variant(Integer(), "sqlite")
+TIMESTAMP = DateTime().with_variant(mysql.DATETIME(fsp=6), "mysql", "mariadb")
+
 
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
-class User(Base):
+
+class Audited:
+    """
+    The four audit columns every table has. Times are UTC.
+
+    On insert, updated_* get the same values as created_*.
+    _by is a user id without a foreign key, NULL when nobody is logged in.
+    """
+
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, sort_order=100)
+    created_by: Mapped[int | None] = mapped_column(BigInteger, sort_order=101)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, sort_order=102)
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, sort_order=103)
+
+
+class User(Audited, Base):
     __tablename__ = "users"
     __table_args__ = (
         Index("guid_idx", "guid"),
@@ -44,14 +71,14 @@ class User(Base):
     registration_used_moment: Mapped[datetime | None] = mapped_column(DateTime)
 
 
-class UserGroup(Base):
+class UserGroup(Audited, Base):
     __tablename__ = "user_groups"
 
     id: Mapped[int] = mapped_column(ID, primary_key=True)
     description: Mapped[str] = mapped_column(String(255))
 
 
-class UserToUserGroup(Base):
+class UserToUserGroup(Audited, Base):
     __tablename__ = "users_to_user_groups"
 
     user_id: Mapped[int] = mapped_column(
@@ -62,21 +89,21 @@ class UserToUserGroup(Base):
     )
 
 
-class Desktop(Base):
+class Desktop(Audited, Base):
     __tablename__ = "desktops"
 
     id: Mapped[int] = mapped_column(ID, primary_key=True)
     description: Mapped[str] = mapped_column(String(255))
 
 
-class DesktopGroup(Base):
+class DesktopGroup(Audited, Base):
     __tablename__ = "desktop_groups"
 
     id: Mapped[int] = mapped_column(ID, primary_key=True)
     description: Mapped[str] = mapped_column(String(255))
 
 
-class DesktopToDesktopGroup(Base):
+class DesktopToDesktopGroup(Audited, Base):
     __tablename__ = "desktops_to_desktop_groups"
 
     desktop_id: Mapped[int] = mapped_column(
@@ -87,7 +114,7 @@ class DesktopToDesktopGroup(Base):
     )
 
 
-class DesktopGroupUserGroup(Base):
+class DesktopGroupUserGroup(Audited, Base):
     __tablename__ = "desktopgroup_usergroup"
 
     desktopgroup_id: Mapped[int] = mapped_column(
@@ -104,7 +131,7 @@ class DesktopGroupUserGroup(Base):
     )
 
 
-class OAuth2Client(Base):
+class OAuth2Client(Audited, Base):
     __tablename__ = "oauth2_clients"
 
     identifier: Mapped[str] = mapped_column(String(200), primary_key=True)
