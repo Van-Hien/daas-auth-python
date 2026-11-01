@@ -25,3 +25,10 @@ def verify_password(password: str, stored_hash: str) -> bool:
         return _argon2.verify(stored_hash, password)
     except (VerificationError, InvalidHashError):
         return False
+
+
+def needs_rehash(stored_hash: str) -> bool:
+    """
+    True for PHP's bcrypt, or an Argon2id hash made with other parameters
+    """
+    return stored_hash.startswith("$2") or _argon2.check_needs_rehash(stored_hash)

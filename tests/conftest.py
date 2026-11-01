@@ -42,6 +42,9 @@ def connect_test_database(database_url: str) -> Iterator[Connection]:
     engine.dispose()
 
 
+# ---- MariaDB ---------------------------------------------
+
+
 @pytest.fixture
 def mariadb() -> Iterator[Connection]:
     """
@@ -77,7 +80,8 @@ def head_database(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.fixture
 def app(head_database: Path, tmp_path: Path) -> Iterator[FastAPI]:
-    """The service on a copy of head: every test starts with the same rows.
+    """
+    The service on a copy of head: every test starts with the same rows.
 
     A file, not sqlite:// in memory: the test client calls the routes from other
     threads, and every thread would get its own empty in-memory database.
@@ -89,6 +93,20 @@ def app(head_database: Path, tmp_path: Path) -> Iterator[FastAPI]:
         seed_database(session, email=ADMIN_EMAIL, name="Admin", password=ADMIN_PASSWORD)
     yield app
     app.state.engine.dispose()
+
+
+@pytest.fixture
+def admin_login() -> dict[str, str]:
+    """
+    The seeded admin's login, as the frontend's Admin tab sends it.
+    """
+    return {
+        "grant_type": "password",
+        "username": ADMIN_EMAIL,
+        "password": ADMIN_PASSWORD,
+        "client_id": "test-client",
+        "scope": "admin",
+    }
 
 
 @pytest.fixture

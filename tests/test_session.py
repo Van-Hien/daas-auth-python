@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from daas_auth.api.auth import now
-from daas_auth.domain.tokens import issue_pair
+from daas_auth.domain.tokens import SESSION_MAX, expiry, new_token, save_pair
 from daas_auth.models import OAuth2Token, User
 
 LOGIN_TIME = datetime(2026, 11, 2, 9, 0)
@@ -15,18 +15,22 @@ LOGIN_TIME = datetime(2026, 11, 2, 9, 0)
 
 def token_for(app: FastAPI, email: str, scopes: list[str]) -> str:
     """An access token as a login would issue it, without the login route."""
+    access_token = new_token()
     with Session(app.state.engine) as session:
         user_id = session.scalars(select(User.id).where(User.email == email)).one()
-        pair = issue_pair(
+        save_pair(
             session,
+            access_token=access_token,
+            refresh_token=new_token(),
             user_id=user_id,
             client_id="test-client",
             scopes=scopes,
             family_id=None,
             now=LOGIN_TIME,
+            expires=expiry(LOGIN_TIME, LOGIN_TIME + SESSION_MAX),
         )
         session.commit()
-    return pair.access_token
+    return access_token
 
 
 def at(app: FastAPI, moment: datetime) -> None:

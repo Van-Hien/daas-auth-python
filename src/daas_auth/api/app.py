@@ -38,7 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.engine = engine
     app.add_exception_handler(OAuthError, oauth_error_response)
     app.include_router(public_router)
-
+    app.include_router(oauth.public_router)
     # Default-deny: every router from here on runs the bearer check first.
     for router in (oauth.router,):
         app.include_router(router, dependencies=[Depends(authenticated)])
