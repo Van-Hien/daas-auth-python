@@ -190,6 +190,7 @@ class OAuth2Token(Audited, Base):
     """
 
     __tablename__ = "oauth2_tokens"
+    __table_args__ = MYSQL
 
     id: Mapped[int] = mapped_column(ID, primary_key=True)
     family_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
@@ -205,3 +206,26 @@ class OAuth2Token(Audited, Base):
     refresh_token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     refresh_expires_at: Mapped[datetime] = mapped_column(TIMESTAMP)
     revoked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+
+
+class ActivityLog(Audited, Base):
+    """
+    Append-only: the service only gonna inserts here.
+    """
+
+    __tablename__ = "activity_log"
+    __table_args__ = (
+        Index("ix_activity_log_target_table", "target_table", "target_id"),
+        Index("ix_activity_log_actor_email", "actor_email", "created_at"),
+        MYSQL,
+    )
+
+    id: Mapped[int] = mapped_column(ID, primary_key=True)
+    action: Mapped[str] = mapped_column(String(32))
+    result: Mapped[str] = mapped_column(String(8))
+    reason: Mapped[str | None] = mapped_column(String(32))
+    actor_email: Mapped[str | None] = mapped_column(String(255))
+    target_table: Mapped[str | None] = mapped_column(String(64))
+    target_id: Mapped[int | None] = mapped_column(BigInteger)
+    source_ip: Mapped[str | None] = mapped_column(String(45))
+    details: Mapped[str | None] = mapped_column(String(255))
