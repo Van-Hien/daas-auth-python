@@ -2,8 +2,9 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from daas_auth.api import oauth
+from daas_auth.api import oauth, users
 from daas_auth.api.auth import authenticated
 from daas_auth.api.errors import bearer_error_response
 from daas_auth.api.health import public_router
@@ -37,10 +38,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.engine = engine
     app.add_exception_handler(BearerError, bearer_error_response)
+    # Answers the browser's preflight (OPTIONS) and marks each answer as readable
+    # for the frontend's origin. The bearer token is a header, so no cookies needed here.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(public_router)
     app.include_router(oauth.public_router)
     # Default-deny: every router from here on runs the bearer check first.
-    for router in (oauth.router,):
+    for router in (oauth.router, users.router):
         app.include_router(router, dependencies=[Depends(authenticated)])
 
     return app

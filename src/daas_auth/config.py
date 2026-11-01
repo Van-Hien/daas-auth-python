@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # The settings. A field without a default is required.
     # Spaces at both ends are removed first, then at least 1 character must be left.
     database_url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    # The browser calls the service from the frontend's page, another origin (CORS).
+    # PHP answers every origin; this service only these. Set as a JSON list:
+    # DAAS_AUTH_CORS_ORIGINS='["https://front1.cluster.local:8443"]'
+    cors_origins: list[str] = ["https://front1.cluster.local:8443"]
 
 
 def load_settings() -> Settings:
