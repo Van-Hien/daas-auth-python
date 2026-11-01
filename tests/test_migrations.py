@@ -83,7 +83,7 @@ def test_php_rows_survive_the_migrations(sqlite: Connection) -> None:
     rows = sqlite.execute(sa.select(user_roles).order_by(user_roles.c.user_id))
     assert rows.all() == [(1, 1), (2, 2)]  # roles: 1 admin, 2 user
     emails = sqlite.execute(
-        sa.select(sa.column("email")).select_from(sa.table("users"))
+        sa.select(sa.column("email", sa.String)).select_from(sa.table("users"))
     )
     assert sorted(emails.scalars()) == ["admin@x.de", "user@x.de"]
 

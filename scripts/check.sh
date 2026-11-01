@@ -11,7 +11,7 @@ else
 fi
 
 gates=(
-  "mypy|uv run mypy src"
+  "mypy|uv run mypy src tests"
   "ruff|uv run ruff check"
   "format|uv run ruff format --check"
   "imports|uv run lint-imports"
