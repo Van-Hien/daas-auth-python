@@ -182,3 +182,26 @@ class UserRole(Audited, Base):
     role_id: Mapped[int] = mapped_column(
         ID, ForeignKey("roles.id"), primary_key=True, index=True
     )
+
+
+class OAuth2Token(Audited, Base):
+    """
+    One issued access/refresh pair. Only SHA-256 hashes.
+    """
+
+    __tablename__ = "oauth2_tokens"
+
+    id: Mapped[int] = mapped_column(ID, primary_key=True)
+    family_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ID, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    client_id: Mapped[str] = mapped_column(
+        String(200), ForeignKey("oauth2_clients.identifier"), index=True
+    )
+    scopes: Mapped[str] = mapped_column(String(255))
+    access_token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    access_expires_at: Mapped[datetime] = mapped_column(TIMESTAMP)
+    refresh_token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    refresh_expires_at: Mapped[datetime] = mapped_column(TIMESTAMP)
+    revoked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
