@@ -1,4 +1,4 @@
-"""make email unique
+"""make email unique: stored as strip()+lower(), one account per email address
 
 Revision ID: 0005
 Revises: 0004
