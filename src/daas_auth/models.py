@@ -62,7 +62,6 @@ class Audited:
 class User(Audited, Base):
     __tablename__ = "users"
     __table_args__ = (
-        Index("guid_idx", "guid"),
         Index("registration_idx", "email", "registration_code"),
         {
             # an id is never given out twice (h)
@@ -72,9 +71,10 @@ class User(Audited, Base):
     )
 
     id: Mapped[int] = mapped_column(ID, primary_key=True)
-    guid: Mapped[str] = mapped_column(String(255))
+    guid: Mapped[str] = mapped_column(String(255), unique=True)
     name: Mapped[str] = mapped_column(String(255))
-    email: Mapped[str] = mapped_column(String(255))
+    # should be stored normalised to ensure uniqueness
+    email: Mapped[str] = mapped_column(String(255), unique=True)
     password: Mapped[str] = mapped_column(String(255))  # a hash, never the password
     enabled: Mapped[bool] = mapped_column(Boolean(), server_default=text("0"))
     registration_code: Mapped[str | None] = mapped_column(String(8))
