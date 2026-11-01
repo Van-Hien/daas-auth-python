@@ -22,7 +22,7 @@ from oauthlib.oauth2.rfc6749.errors import (
     OAuth2Error,
     UnsupportedGrantTypeError,
 )
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from daas_auth.domain.activity import Action, record
@@ -35,7 +35,7 @@ from daas_auth.domain.tokens import (
     new_token,
     save_pair,
 )
-from daas_auth.models import OAuth2Client, Role, User, UserRole
+from daas_auth.models import OAuth2Client, OAuth2Token, Role, User, UserRole
 
 if TYPE_CHECKING:  # the type exists only in the stubs (types-oauthlib)
     from oauthlib.oauth2.rfc6749.request_validator import _BearerToken
@@ -63,8 +63,10 @@ class Validator(RequestValidator):
         self.now = now
         self.user: User | None = None
         self.client_id: str | None = None
+        self.old: OAuth2Token | None = None  # the row a refresh replaces
         self.session_ends = now + SESSION_MAX  # a login starts the session
         self.reason: str | None = None  # why it was refused, for activity_log only
+        self.reused_family: int | None = None
 
     def _refuse(self, reason: str) -> bool:
         self.reason = reason
@@ -197,6 +199,56 @@ class Validator(RequestValidator):
         roles = select(Role.name).join(UserRole).where(UserRole.user_id == user.id)
         return set(self.session.scalars(roles))
 
+    # ---- the refresh grant ---------------------------------------------
+
+    def validate_refresh_token(
+        self,
+        refresh_token: str,
+        client: Any,
+        request: Request,
+        *args: Any,
+        **kwargs: Any,
+    ) -> bool:
+        # FOR UPDATE: two refreshes with one token run one after the other on MariaDB.
+        row = self.session.scalars(
+            select(OAuth2Token)
+            .where(OAuth2Token.refresh_token_hash == hash_token(refresh_token))
+            .with_for_update()
+        ).one_or_none()
+        if row is None:
+            return self._refuse("unknown")
+        if row.client_id != client.client_id:
+            return self._refuse("other_client")
+        if row.revoked_at is not None:
+            # Already used: someone holds a copy. The family dies after the rollback.
+            self.reused_family = row.family_id
+            return self._refuse("reused")
+        if row.refresh_expires_at <= self.now:
+            return self._refuse("expired")
+        user = self.session.get_one(User, row.user_id)
+        if not user.enabled:
+            return self._refuse("disabled")
+        # family_id is the id of the login's row, so its created_at is the login time
+        login = self.session.get_one(OAuth2Token, row.family_id)
+        self.session_ends = login.created_at + SESSION_MAX
+        self.old, self.user = row, user
+        return True
+
+    def get_original_scopes(
+        self, refresh_token: str, request: Request, *args: Any, **kwargs: Any
+    ) -> list[str]:
+        # A role taken away since the login does not come back with a refresh.
+        if self.old is None:
+            raise RuntimeError("scopes are read after the refresh token")
+        held = self._held(self.user)
+        scopes = [scope for scope in self.old.scopes.split() if scope in held]
+        if not scopes:
+            self.reason = "invalid_scope"
+            raise InvalidScopeError(
+                "The account no longer holds a scope of this token.", request=request
+            )
+        return scopes
+
     # ---- the token pair --------------------------------------------------
 
     def expires_in(self, request: Request) -> int:
@@ -211,6 +263,12 @@ class Validator(RequestValidator):
             raise RuntimeError(
                 "a token is saved after the client and the user are known"
             )
+        family_id = None
+        if self.old is not None:
+            # One row holds the pair, so this also kills the old access token.
+            self.old.revoked_at = self.now
+            self.old.updated_at = self.now
+            family_id = self.old.family_id
         refresh_token = token.get("refresh_token")
         if refresh_token is None:  # oauthlib adds it whenever the grant issues one
             raise RuntimeError("the password grant always issues a refresh token")
@@ -221,7 +279,7 @@ class Validator(RequestValidator):
             user_id=self.user.id,
             client_id=self.client_id,
             scopes=list(request.scopes or []),
-            family_id=None,  # a login starts a family
+            family_id=family_id,
             now=self.now,
             expires=expiry(self.now, self.session_ends),
         )
@@ -234,7 +292,7 @@ class TokenResponse:
     status: int
 
 
-GRANTS = {"password": Action.LOGIN}
+GRANTS = {"password": Action.LOGIN, "refresh_token": Action.TOKEN_REFRESH}
 
 
 def token_response(
@@ -305,7 +363,15 @@ def _log_refusal(
     source_ip: str | None,
 ) -> None:
     session.rollback()  # nothing of the refused attempt is kept, only its log row
-    # oauthlib's Request raises on a parameter the body lacks, such as username.
+    family = validator.reused_family
+    if family is not None:
+        # A refresh token used twice: every pair of its login dies, the newest too.
+        session.execute(
+            update(OAuth2Token)
+            .where(OAuth2Token.family_id == family)
+            .values(revoked_at=now, updated_at=now)
+        )
+    # A refresh has no username, and oauthlib's Request raises on a name it lacks.
     email = normalise_email(getattr(request, "username", None) or "")
     record(
         session,
@@ -315,4 +381,5 @@ def _log_refusal(
         reason=validator.reason or json.loads(answer or "{}").get("error"),
         actor_email=email[:255] or None,  # an attempt may be longer than the column
         source_ip=source_ip,
+        details=None if family is None else f"family {family}",
     )
