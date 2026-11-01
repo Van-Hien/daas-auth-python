@@ -10,7 +10,7 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from daas_auth.domain.bearer import Caller, authenticate
-from daas_auth.domain.errors import insufficient_permissions
+from daas_auth.domain.errors import insufficient_scope
 
 
 def get_session(request: Request) -> Iterator[Session]:
@@ -42,7 +42,7 @@ def require_scope(scope: str) -> Callable[[Caller], Caller]:
 
     def check(caller: AuthCaller) -> Caller:
         if scope not in caller.scopes:
-            raise insufficient_permissions(scope, caller.scopes)
+            raise insufficient_scope(scope)
         return caller
 
     return check

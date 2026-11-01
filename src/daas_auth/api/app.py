@@ -5,11 +5,11 @@ from fastapi import Depends, FastAPI
 
 from daas_auth.api import oauth
 from daas_auth.api.auth import authenticated
-from daas_auth.api.errors import oauth_error_response
+from daas_auth.api.errors import bearer_error_response
 from daas_auth.api.health import public_router
 from daas_auth.config import Settings, load_settings
 from daas_auth.db import check_strict_mode, make_engine
-from daas_auth.domain.errors import OAuthError
+from daas_auth.domain.errors import BearerError
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -36,7 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.engine = engine
-    app.add_exception_handler(OAuthError, oauth_error_response)
+    app.add_exception_handler(BearerError, bearer_error_response)
     app.include_router(public_router)
     app.include_router(oauth.public_router)
     # Default-deny: every router from here on runs the bearer check first.
