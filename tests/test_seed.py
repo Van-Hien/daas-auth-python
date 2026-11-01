@@ -38,7 +38,7 @@ def test_seed_creates_the_admin_and_test_client(session: Session) -> None:
     role = select(Role.name).join(UserRole).where(UserRole.user_id == admin_id)
     assert session.scalars(role).all() == ["admin"]
     client = session.get_one(OAuth2Client, "test-client")
-    assert (client.is_confidential, client.secret) == (False, None)
+    assert (client.is_confidential, client.secret_hash) == (False, None)
     actions = session.scalars(select(ActivityLog.action)).all()
     assert actions == ["seed", "seed"]
 

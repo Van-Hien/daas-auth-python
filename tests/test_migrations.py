@@ -1,3 +1,4 @@
+import hashlib
 from collections.abc import Iterator
 from datetime import datetime
 
@@ -90,6 +91,48 @@ def test_php_rows_survive_the_migrations(sqlite: Connection) -> None:
     command.downgrade(config, "0003")  # 0004 back: users.role filled from user_roles
     roles = sqlite.execute(sa.select(php_users.c.id, php_users.c.role).order_by("id"))
     assert roles.all() == [(1, "admin"), (2, "user")]
+
+
+def test_0009_keeps_only_a_hash_of_a_client_secret(sqlite: Connection) -> None:
+    config = alembic_config(sqlite)
+    command.upgrade(config, "0008")
+    now = datetime(2026, 11, 2)
+    clients = sa.table(
+        "oauth2_clients",
+        *(sa.column(name) for name in ("identifier", "version", "name")),
+        *(sa.column(name) for name in ("redirect_uris", "is_confidential", "secret")),
+        sa.column("created_at", sa.DateTime()),
+        sa.column("updated_at", sa.DateTime()),
+    )
+    sqlite.execute(
+        clients.insert(),
+        [
+            {
+                "identifier": identifier,
+                "version": 1,
+                "name": identifier,
+                "redirect_uris": "[]",
+                "is_confidential": secret is not None,
+                "secret": secret,
+                "created_at": now,
+                "updated_at": now,
+            }
+            for identifier, secret in (("public", None), ("quart", "s3cret"))
+        ],
+    )
+    command.upgrade(config, "0009")
+    hashes = sa.select(
+        sa.column("identifier", sa.String), sa.column("secret_hash", sa.String)
+    )
+    rows = sqlite.execute(
+        hashes.select_from(sa.table("oauth2_clients")).order_by("identifier")
+    )
+    assert rows.all() == [
+        ("public", None),
+        ("quart", hashlib.sha256(b"s3cret").hexdigest()),
+    ]
+    with pytest.raises(RuntimeError, match="can't be restored"):
+        command.downgrade(config, "0008")
 
 
 def test_two_spellings_of_one_email_stop_0005(sqlite: Connection) -> None:

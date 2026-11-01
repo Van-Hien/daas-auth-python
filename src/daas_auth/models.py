@@ -159,7 +159,8 @@ class OAuth2Client(Audited, Base):
         Text().with_variant(mysql.LONGTEXT(), "mysql", "mariadb")
     )  # JSON text, as in PHP
     is_confidential: Mapped[bool] = mapped_column(Boolean)
-    secret: Mapped[str | None] = mapped_column(String(200))
+    # SHA-256 of the secret as hex (0009). NULL: a public client, such as test-client.
+    secret_hash: Mapped[str | None] = mapped_column(String(64))
 
 
 class Role(Audited, Base):
