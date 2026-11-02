@@ -179,14 +179,14 @@ def user_form(email: str, password: str) -> dict[str, str]:
 
 
 def test_an_admin_enables_and_disables_a_user(
-    client: TestClient, admin: dict[str, str]
+    client: TestClient,
+    admin: dict[str, str],
+    login: Login,
 ) -> None:
     anna = client.post("/user", json=new_user(), headers=admin).json()["id"]
     enabled = client.post(f"/user/{anna}/enable", headers=admin)
     assert (enabled.status_code, enabled.json()["enabled"]) == (200, True)
-    form = user_form("anna@x.de", "a-long-enough-pw")
-    token = client.post("/oauth2/user/token", data=form).json()["access_token"]
-    session = {"Authorization": f"Bearer {token}"}
+    session = login("anna@x.de", "a-long-enough-pw", "user")
     assert client.get("/oauth2/user/session", headers=session).status_code == 200
 
     disabled = client.post(f"/user/{anna}/disable", headers=admin)

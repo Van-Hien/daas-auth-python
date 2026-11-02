@@ -6,15 +6,21 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException
 
-from daas_auth.api import oauth, users
-from daas_auth.api.auth import authenticated
+from daas_auth.api.dependencies import authenticated
 from daas_auth.api.errors import (
     bearer_error_response,
     http_error_response,
     refused_response,
     validation_error_response,
 )
-from daas_auth.api.health import public_router
+from daas_auth.api.routes import (
+    admins,
+    health,
+    oauth,
+    user_groups,
+    users,
+    without_mail,
+)
 from daas_auth.config import Settings, load_settings
 from daas_auth.db import check_strict_mode, enforce_foreign_keys, make_engine
 from daas_auth.domain.errors import BearerError, Refused
@@ -58,11 +64,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.include_router(public_router)
-    app.include_router(oauth.public_router)
-    app.include_router(users.public_router)
+    for public_router in (
+        health.public_router,
+        oauth.public_router,
+        without_mail.public_router,
+    ):
+        app.include_router(public_router)
     # Default-deny: every router from here on runs the bearer check first.
-    for router in (oauth.router, users.router, users.user_router):
+    for router in (
+        oauth.router,
+        users.admin_router,
+        admins.admin_router,
+        user_groups.router,
+        without_mail.user_router,
+    ):
         app.include_router(router, dependencies=[Depends(authenticated)])
 
     return app

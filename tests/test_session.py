@@ -7,7 +7,7 @@ from httpx2 import Response
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from daas_auth.api.auth import now
+from daas_auth.api.dependencies import now
 from daas_auth.domain.tokens import SESSION_MAX, expiry, new_token, save_pair
 from daas_auth.models import OAuth2Token, User
 

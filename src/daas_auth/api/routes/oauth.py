@@ -7,7 +7,7 @@ import anyio
 from anyio.to_thread import run_sync
 from fastapi import APIRouter, Depends, Request, Response
 
-from daas_auth.api.auth import AuthCaller, DbSession, Now, require_scope
+from daas_auth.api.dependencies import AuthCaller, DbSession, Now, require_scope
 from daas_auth.domain.grants import token_response
 
 public_router = APIRouter()  # the login itself can't need a token

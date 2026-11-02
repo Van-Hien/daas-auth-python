@@ -76,4 +76,11 @@ type = "forbidden"
 source_modules = ["daas_auth.domain"]
 forbidden_modules = ["daas_auth.api"]
 
+# Second contract
+[[tool.importlinter.contracts]]
+name = "route modules do not import each other"
+type = "independence"
+modules = ["daas_auth.api.routes.*"]
+
+
 

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from daas_auth.api.auth import now
+from daas_auth.api.dependencies import now
 from daas_auth.models import ActivityLog, OAuth2Client, OAuth2Token, UserRole
 
 URL = "/oauth2/user/token"
