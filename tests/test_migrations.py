@@ -8,8 +8,11 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from daas_auth.db import make_engine
+from daas_auth.domain.accounts import Actor, delete_user
+from daas_auth.models import Role, User, UserRole
 
 
 def alembic_config(connection: Connection) -> Config:
@@ -224,3 +227,38 @@ def test_user_roles_keeps_history_and_app_cannot_delete_it(
     with pytest.raises(SQLAlchemyError, match="1142"):  # DELETE HISTORY denied
         mariadb.exec_driver_sql("DELETE HISTORY FROM user_roles")
     mariadb.rollback()
+
+
+@pytest.mark.mariadb
+def test_deleting_a_user_on_mariadb(migrated: None, mariadb: Connection) -> None:
+    now = datetime(2026, 11, 3)
+    with Session(bind=mariadb) as session:
+        user = User(
+            guid="g1",
+            name="a",
+            email="a@x.de",
+            password="h",
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(user)
+        session.flush()
+        role_id = session.scalars(sa.select(Role.id).where(Role.name == "user")).one()
+        session.add(
+            UserRole(user_id=user.id, role_id=role_id, created_at=now, updated_at=now)
+        )
+        session.commit()
+        user_id = user.id
+
+        # What a plain DELETE gets while user_roles still points at the user.
+        with pytest.raises(SQLAlchemyError, match="1451"):
+            session.execute(sa.delete(User))
+        session.rollback()
+
+        delete_user(session, user_id, actor=Actor(99, "admin@x.de", None), now=now)
+        session.commit()
+        assert session.get(User, user_id) is None
+
+    # FOR SYSTEM_TIME has no SQLAlchemy form: a fixed SQL text, MariaDB only (N-2).
+    history = "SELECT updated_by FROM user_roles FOR SYSTEM_TIME ALL ORDER BY row_end"
+    assert mariadb.exec_driver_sql(history).scalars().all() == [None, 99]

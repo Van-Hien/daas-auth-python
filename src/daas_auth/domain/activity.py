@@ -19,6 +19,7 @@ class Action(StrEnum):
     USER_UPDATE = "user_update"
     USER_ENABLE = "user_enable"
     USER_DISABLE = "user_disable"
+    USER_DELETE = "user_delete"
 
 
 def record(

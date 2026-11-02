@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from daas_auth.domain.passwords import hash_password
-from daas_auth.models import ActivityLog, User, UserGroup
+from daas_auth.models import ActivityLog, OAuth2Token, User, UserGroup
 
 PROBLEM = "application/problem+json"
 Login = Callable[..., dict[str, str]]
@@ -254,3 +254,46 @@ def test_refusals_of_the_user_changes(
     user = login("carl@x.de", "carl-pw-1", "user")
     assert client.post(f"/user/{anna}/enable", headers=user).status_code == 403
     assert client.patch(f"/user/{anna}", json={}, headers=user).status_code == 403
+
+
+def test_an_admin_deletes_a_user_and_the_users_tokens(
+    app: FastAPI, client: TestClient, admin: dict[str, str]
+) -> None:
+    add_groups(app, 1)
+    anna = client.post("/user", json=new_user(groups=[1]), headers=admin).json()["id"]
+    client.post(f"/user/{anna}/enable", headers=admin)
+    form = user_form("anna@x.de", "a-long-enough-pw")
+    token = client.post("/oauth2/user/token", data=form).json()["access_token"]
+
+    response = client.delete(f"/user/{anna}", headers=admin)
+    assert (response.status_code, response.json()) == (200, "User deleted")
+    assert client.get(f"/user/{anna}", headers=admin).status_code == 404
+    gone = client.get(
+        "/oauth2/user/session", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert gone.status_code == 401
+    with Session(app.state.engine) as session:
+        assert (
+            session.scalars(
+                select(OAuth2Token).where(OAuth2Token.user_id == anna)
+            ).all()
+            == []
+        )
+
+
+def test_refusals_of_delete_user(
+    client: TestClient,
+    admin: dict[str, str],
+    login: Login,
+    add_user: Callable[..., int],
+) -> None:
+    me = client.get("/oauth2/user/session", headers=admin).json()["user_id"]
+    for user_id in (me, 999):  # an admin goes through DELETE /admin/{id}
+        response = client.delete(f"/user/{user_id}", headers=admin)
+        assert (response.status_code, response.headers["content-type"]) == (
+            404,
+            PROBLEM,
+        )
+    bob = add_user("bob@x.de", hash_password("bob-pw-1"))
+    user = login("bob@x.de", "bob-pw-1", "user")
+    assert client.delete(f"/user/{bob}", headers=user).status_code == 403

@@ -126,3 +126,10 @@ def user_disable(
     user = accounts.set_enabled(session, user_id, False, actor=actor, now=at)
     session.commit()
     return UserPublic.of(user, accounts.group_ids(session, user_id))
+
+
+@router.delete("/user/{user_id}")
+def user_delete(user_id: int, session: DbSession, actor: Acting, at: Now) -> str:
+    accounts.delete_user(session, user_id, actor=actor, now=at)
+    session.commit()
+    return "User deleted"  # PHP's answer, a JSON string

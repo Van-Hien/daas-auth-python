@@ -162,6 +162,30 @@ def set_enabled(
     return user
 
 
+def delete_user(session: Session, user_id: int, *, actor: Actor, now: datetime) -> None:
+    _delete_account(
+        session, find_user(session, user_id), Action.USER_DELETE, actor, now
+    )
+
+
+def _delete_account(
+    session: Session, account: User, action: Action, actor: Actor, now: datetime
+) -> None:
+    """
+    The rows that point at the account first: they have no ON DELETE, so MariaDB
+    refuses the user while they exist. Its tokens go with it (ON DELETE CASCADE).
+    """
+    for link in (UserRole, UserToUserGroup):
+        mine = link.user_id == account.id
+        # Stamped before the delete, so the row's history says who removed it.
+        session.execute(
+            update(link).where(mine).values(updated_at=now, updated_by=actor.id)
+        )
+        session.execute(delete(link).where(mine))
+    session.delete(account)
+    _log(session, action, account.id, actor, now)
+
+
 def _revoke_tokens(session: Session, user_id: int, actor: Actor, now: datetime) -> None:
     session.execute(
         update(OAuth2Token)
