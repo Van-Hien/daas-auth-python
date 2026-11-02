@@ -34,4 +34,15 @@ done
 
 printf '\n===== summary =====\n'
 printf '%s\n' "${summary[@]}"
+
+# Source - https://stackoverflow.com/a/35619927
+# Posted by Bruce
+# Retrieved 2026-11-02, License - CC BY-SA 3.0
+
+#!/bin/bash
+
+current_date_time="`date +"%c"`";
+
+printf "\nmake check ran on \n\t${green}${current_date_time}${reset}\n"
+
 exit "$failed"

@@ -10,7 +10,17 @@ only "Bearer", with no error: it just did not know a token was needed.
 
 The token endpoint's refusals (wrong password, ...) are not here: oauthlib
 builds those (domain/grants.py).
+
+Refused is every other refusal (an unknown id, a duplicate email, ...);
+api/errors.py answers it as problem details.
 """
+
+
+class Refused(Exception):
+    def __init__(self, status: int, detail: str) -> None:
+        super().__init__(detail)
+        self.status = status
+        self.detail = detail
 
 
 class BearerError(Exception):

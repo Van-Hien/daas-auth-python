@@ -8,19 +8,23 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
 from daas_auth.api.auth import DbSession, require_scope
-from daas_auth.models import Role, User, UserGroup, UserRole, UserToUserGroup
+from daas_auth.api.schemas import (
+    AdminPublic,
+    UserGroupPublic,
+    UserPublic,
+)
+from daas_auth.domain import accounts
+from daas_auth.domain.accounts import ADMINS
+from daas_auth.models import User, UserGroup, UserToUserGroup
 
 # In PHP every route here needs the admin scope (security: oauth2-user admin).
 router = APIRouter(dependencies=[Depends(require_scope("admin"))])
 
-# The API shows one role per account: admin if it holds that role, else user.
-ADMINS = select(UserRole.user_id).join(Role).where(Role.name == "admin")
-
 
 @router.get("/users")
-def user_list(session: DbSession) -> list[dict[str, object]]:
+def user_list(session: DbSession) -> list[UserPublic]:
     """
-    Every account that is not an admin, as PHP's User entities, by id.
+    Every account that is not an admin, disabled ones too, by id.
     """
     groups: defaultdict[int, list[int]] = defaultdict(list)
     links = select(UserToUserGroup.user_id, UserToUserGroup.user_group_id)
@@ -31,35 +35,33 @@ def user_list(session: DbSession) -> list[dict[str, object]]:
     users = session.scalars(
         select(User).where(User.id.not_in(ADMINS)).order_by(User.id)
     )
-    return [
-        {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "role": "user",
-            "groups": groups[user.id],
-            "enabled": user.enabled,
-        }
-        for user in users
-    ]
+    return [UserPublic.of(user, groups[user.id]) for user in users]
+
+
+@router.get("/user/{user_id}")
+def user_get(user_id: int, session: DbSession) -> AdminPublic | UserPublic:
+    """
+    One account. As in PHP, an admin's id gives the admin's shape.
+    """
+    account = accounts.find_account(session, user_id)
+    if accounts.is_admin(session, user_id):
+        return AdminPublic.model_validate(account)
+    return UserPublic.of(account, accounts.group_ids(session, user_id))
 
 
 @router.get("/admins")
-def admin_list(session: DbSession) -> list[dict[str, object]]:
+def admin_list(session: DbSession) -> list[AdminPublic]:
     """
     Every admin, by id.
     """
     admins = session.scalars(select(User).where(User.id.in_(ADMINS)).order_by(User.id))
-    return [
-        {"id": admin.id, "name": admin.name, "email": admin.email, "role": "admin"}
-        for admin in admins
-    ]
+    return [AdminPublic.model_validate(admin) for admin in admins]
 
 
 @router.get("/user_groups")
-def user_group_list(session: DbSession) -> list[dict[str, object]]:
+def user_group_list(session: DbSession) -> list[UserGroupPublic]:
     """
     Every user group, by id.
     """
     groups = session.scalars(select(UserGroup).order_by(UserGroup.id))
-    return [{"id": group.id, "description": group.description} for group in groups]
+    return [UserGroupPublic.model_validate(group) for group in groups]

@@ -6,7 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
-from daas_auth.domain.errors import BearerError
+from daas_auth.domain.errors import BearerError, Refused
 
 # RFC 9457's media type for an error body outside OAuth
 PROBLEM = "application/problem+json"
@@ -55,6 +55,16 @@ def http_error_response(_: Request, error: Exception) -> JSONResponse:
         error.detail if error.detail != HTTPStatus(error.status_code).phrase else None
     )
     return problem(error.status_code, detail, error.headers)
+
+
+def refused_response(_: Request, error: Exception) -> JSONResponse:
+    """
+    What domain/ refuses: an unknown id, a duplicate email, ...
+    """
+    # app.py registers it for Refused only
+    if not isinstance(error, Refused):
+        raise error
+    return problem(error.status, error.detail)
 
 
 def validation_error_response(_: Request, error: Exception) -> JSONResponse:

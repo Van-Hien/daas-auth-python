@@ -145,3 +145,31 @@ def add_user(app: FastAPI) -> Callable[..., int]:
             return user.id
 
     return add
+
+
+@pytest.fixture
+def login(client: TestClient) -> Callable[..., dict[str, str]]:
+    """
+    login(email, password, scope) -> the Authorization header of a new token.
+    """
+
+    def headers(email: str, password: str, scope: str) -> dict[str, str]:
+        form = {
+            "grant_type": "password",
+            "username": email,
+            "password": password,
+            "client_id": "test-client",
+            "scope": scope,
+        }
+        token = client.post("/oauth2/user/token", data=form).json()["access_token"]
+        return {"Authorization": f"Bearer {token}"}
+
+    return headers
+
+
+@pytest.fixture
+def admin(login: Callable[..., dict[str, str]]) -> dict[str, str]:
+    """
+    The seeded admin's Authorization header.
+    """
+    return login(ADMIN_EMAIL, ADMIN_PASSWORD, "admin")
