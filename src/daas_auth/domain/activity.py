@@ -20,6 +20,8 @@ class Action(StrEnum):
     USER_ENABLE = "user_enable"
     USER_DISABLE = "user_disable"
     USER_DELETE = "user_delete"
+    ADMIN_CREATE = "admin_create"
+    ADMIN_DELETE = "admin_delete"
 
 
 def record(

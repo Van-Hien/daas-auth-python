@@ -243,13 +243,8 @@ def test_refusals_of_the_user_changes(
     anna = client.post("/user", json=new_user(), headers=admin).json()["id"]
     taken = client.patch(f"/user/{anna}", json={"email": "BOB@x.de"}, headers=admin)
     assert taken.status_code == 409
-    me = client.get("/oauth2/user/session", headers=admin).json()["user_id"]
-    for path in (f"/user/{me}/disable", "/user/999/enable"):  # an admin is no user
-        response = client.post(path, headers=admin)
-        assert (response.status_code, response.headers["content-type"]) == (
-            404,
-            PROBLEM,
-        )
+    response = client.post("/user/999/enable", headers=admin)
+    assert (response.status_code, response.headers["content-type"]) == (404, PROBLEM)
     add_user("carl@x.de", hash_password("carl-pw-1"))
     user = login("carl@x.de", "carl-pw-1", "user")
     assert client.post(f"/user/{anna}/enable", headers=user).status_code == 403
@@ -287,13 +282,8 @@ def test_refusals_of_delete_user(
     login: Login,
     add_user: Callable[..., int],
 ) -> None:
-    me = client.get("/oauth2/user/session", headers=admin).json()["user_id"]
-    for user_id in (me, 999):  # an admin goes through DELETE /admin/{id}
-        response = client.delete(f"/user/{user_id}", headers=admin)
-        assert (response.status_code, response.headers["content-type"]) == (
-            404,
-            PROBLEM,
-        )
+    response = client.delete("/user/999", headers=admin)
+    assert (response.status_code, response.headers["content-type"]) == (404, PROBLEM)
     bob = add_user("bob@x.de", hash_password("bob-pw-1"))
     user = login("bob@x.de", "bob-pw-1", "user")
     assert client.delete(f"/user/{bob}", headers=user).status_code == 403

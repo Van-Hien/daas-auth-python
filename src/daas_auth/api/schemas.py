@@ -78,3 +78,9 @@ class UserUpdate(RequestModel):
     email: EmailStr | None = None
     password: Password | None = None
     groups: list[int] | None = None
+
+
+class AdminCreate(RequestModel):
+    name: Name
+    email: EmailStr
+    password: Password

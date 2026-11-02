@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from daas_auth.api.auth import Acting, DbSession, Now, require_scope
 from daas_auth.api.schemas import (
+    AdminCreate,
     AdminPublic,
     Message,
     UserCreate,
@@ -43,6 +44,24 @@ def user_create(
     )
     session.commit()
     return UserPublic.of(user, accounts.group_ids(session, user.id))
+
+
+@router.post("/admin")
+def admin_create(
+    body: AdminCreate, session: DbSession, actor: Acting, at: Now
+) -> AdminPublic:
+    admin = accounts.create_account(
+        session,
+        name=body.name,
+        email=body.email,
+        password=body.password,
+        role="admin",
+        groups=[],
+        actor=actor,
+        now=at,
+    )
+    session.commit()
+    return AdminPublic.model_validate(admin)
 
 
 @router.get("/users")
@@ -133,3 +152,10 @@ def user_delete(user_id: int, session: DbSession, actor: Acting, at: Now) -> str
     accounts.delete_user(session, user_id, actor=actor, now=at)
     session.commit()
     return "User deleted"  # PHP's answer, a JSON string
+
+
+@router.delete("/admin/{admin_id}")
+def admin_delete(admin_id: int, session: DbSession, actor: Acting, at: Now) -> str:
+    accounts.delete_admin(session, admin_id, actor=actor, now=at)
+    session.commit()
+    return "admin deleted"  # PHP's answer, a JSON string

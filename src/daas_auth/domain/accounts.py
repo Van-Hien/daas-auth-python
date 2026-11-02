@@ -50,7 +50,9 @@ def is_admin(session: Session, user_id: int) -> bool:
 
 
 def find_account(session: Session, user_id: int) -> User:
-    """A user or an admin."""
+    """
+    A user or an admin.
+    """
     account = session.get(User, user_id)
     if account is None:
         raise Refused(404, f"No account has the id {user_id}.")
@@ -58,11 +60,22 @@ def find_account(session: Session, user_id: int) -> User:
 
 
 def find_user(session: Session, user_id: int) -> User:
-    """A user who is not an admin: admins have routes of their own."""
+    """
+    A user who is not an admin: admins have routes of their own.
+    """
     user = session.get(User, user_id)
-    if user is None or is_admin(session, user_id):
+    if user is None:
         raise Refused(404, f"No user has the id {user_id}.")
+    if is_admin(session, user_id):
+        raise Refused(409, f"Account {user_id} is an admin: use /admin/{user_id}.")
     return user
+
+
+def find_admin(session: Session, admin_id: int) -> User:
+    admin = session.get(User, admin_id)
+    if admin is None or not is_admin(session, admin_id):
+        raise Refused(404, f"No admin has the id {admin_id}.")
+    return admin
 
 
 def group_ids(session: Session, user_id: int) -> list[int]:
@@ -111,7 +124,8 @@ def create_account(
                 user_id=account.id, user_group_id=group_id, **_stamp(actor, now)
             )
         )
-    _log(session, Action.USER_CREATE, account.id, actor, now)
+    action = Action.ADMIN_CREATE if role == "admin" else Action.USER_CREATE
+    _log(session, action, account.id, actor, now)
     return account
 
 
@@ -166,6 +180,22 @@ def delete_user(session: Session, user_id: int, *, actor: Actor, now: datetime) 
     _delete_account(
         session, find_user(session, user_id), Action.USER_DELETE, actor, now
     )
+
+
+def delete_admin(
+    session: Session, admin_id: int, *, actor: Actor, now: datetime
+) -> None:
+    """
+    Never the last admin, and never yourself: without an admin nobody can manage
+    accounts any more, and daas-auth seed refuses a database that isn't empty.
+    """
+    admin = find_admin(session, admin_id)
+    if admin.id == actor.id:
+        raise Refused(409, "An admin cannot delete their own account.")
+    # FOR UPDATE: two admins deleting each other at once wait for each other.
+    if len(session.scalars(ADMINS.with_for_update()).all()) <= 1:
+        raise Refused(409, "The last admin cannot be deleted.")
+    _delete_account(session, admin, Action.ADMIN_DELETE, actor, now)
 
 
 def _delete_account(
