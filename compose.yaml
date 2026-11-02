@@ -14,6 +14,7 @@ services:
       - --sql-mode=STRICT_ALL_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_bin
+      - --innodb-buffer-pool-size=32M   # cache cap: the data is under 1 MiB; the default 128M fills with undo pages
     volumes:
       - mariadb-data:/var/lib/mysql
       - ./docker/mariadb/initdb:/docker-entrypoint-initdb.d:ro
