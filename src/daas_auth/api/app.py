@@ -2,11 +2,17 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException
 
 from daas_auth.api import oauth, users
 from daas_auth.api.auth import authenticated
-from daas_auth.api.errors import bearer_error_response
+from daas_auth.api.errors import (
+    bearer_error_response,
+    http_error_response,
+    validation_error_response,
+)
 from daas_auth.api.health import public_router
 from daas_auth.config import Settings, load_settings
 from daas_auth.db import check_strict_mode, enforce_foreign_keys, make_engine
@@ -40,6 +46,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.engine = engine
     app.add_exception_handler(BearerError, bearer_error_response)
+    app.add_exception_handler(HTTPException, http_error_response)
+    app.add_exception_handler(RequestValidationError, validation_error_response)
     # Answers the browser's preflight (OPTIONS) and marks each answer as readable
     # for the frontend's origin. The bearer token is a header, so no cookies needed here.
     app.add_middleware(
