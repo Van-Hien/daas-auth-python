@@ -22,6 +22,7 @@ class Action(StrEnum):
     USER_DELETE = "user_delete"
     ADMIN_CREATE = "admin_create"
     ADMIN_DELETE = "admin_delete"
+    APPLICATION_REQUEST = "application_request"
 
 
 def record(

@@ -60,8 +60,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.include_router(public_router)
     app.include_router(oauth.public_router)
+    app.include_router(users.public_router)
     # Default-deny: every router from here on runs the bearer check first.
-    for router in (oauth.router, users.router):
+    for router in (oauth.router, users.router, users.user_router):
         app.include_router(router, dependencies=[Depends(authenticated)])
 
     return app

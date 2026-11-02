@@ -198,6 +198,26 @@ def delete_admin(
     _delete_account(session, admin, Action.ADMIN_DELETE, actor, now)
 
 
+def request_application(
+    session: Session, application: str, language: str, *, actor: Actor, now: datetime
+) -> None:
+    """
+    Recorded, not mailed: no mail leaves this service. PHP mailed it to the user.
+    """
+    record(
+        session,
+        Action.APPLICATION_REQUEST,
+        ok=True,
+        now=now,
+        actor_id=actor.id,
+        actor_email=actor.email,
+        target_table="users",
+        target_id=actor.id,
+        source_ip=actor.source_ip,
+        details=f"{application} ({language})"[:255],
+    )
+
+
 def _delete_account(
     session: Session, account: User, action: Action, actor: Actor, now: datetime
 ) -> None:

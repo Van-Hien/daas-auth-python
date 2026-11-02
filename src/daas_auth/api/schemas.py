@@ -84,3 +84,8 @@ class AdminCreate(RequestModel):
     name: Name
     email: EmailStr
     password: Password
+
+
+class RegistrationCode(RequestModel):
+    email: EmailStr
+    registration_code: Annotated[str, Field(min_length=8)]  # PHP's length
