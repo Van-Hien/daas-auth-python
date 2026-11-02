@@ -10,9 +10,11 @@ from sqlalchemy import select
 from daas_auth.api.auth import Acting, DbSession, Now, require_scope
 from daas_auth.api.schemas import (
     AdminPublic,
+    Message,
     UserCreate,
     UserGroupPublic,
     UserPublic,
+    UserUpdate,
 )
 from daas_auth.domain import accounts
 from daas_auth.domain.accounts import ADMINS
@@ -87,3 +89,40 @@ def user_group_list(session: DbSession) -> list[UserGroupPublic]:
     """
     groups = session.scalars(select(UserGroup).order_by(UserGroup.id))
     return [UserGroupPublic.model_validate(group) for group in groups]
+
+
+@router.patch("/user/{user_id}")
+def user_update(
+    user_id: int, body: UserUpdate, session: DbSession, actor: Acting, at: Now
+) -> Message:
+    """
+    PHP's answer: only a message, unlike enable and disable.
+    """
+    accounts.update_user(
+        session,
+        user_id,
+        name=body.name,
+        email=body.email,
+        password=body.password,
+        groups=body.groups,
+        actor=actor,
+        now=at,
+    )
+    session.commit()
+    return Message(message="User updated")
+
+
+@router.post("/user/{user_id}/enable")
+def user_enable(user_id: int, session: DbSession, actor: Acting, at: Now) -> UserPublic:
+    user = accounts.set_enabled(session, user_id, True, actor=actor, now=at)
+    session.commit()
+    return UserPublic.of(user, accounts.group_ids(session, user_id))
+
+
+@router.post("/user/{user_id}/disable")
+def user_disable(
+    user_id: int, session: DbSession, actor: Acting, at: Now
+) -> UserPublic:
+    user = accounts.set_enabled(session, user_id, False, actor=actor, now=at)
+    session.commit()
+    return UserPublic.of(user, accounts.group_ids(session, user_id))

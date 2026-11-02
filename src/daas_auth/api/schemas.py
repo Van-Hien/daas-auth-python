@@ -49,6 +49,11 @@ class UserGroupPublic(PublicModel):
     description: str
 
 
+class Message(BaseModel):
+    # PHP's answer where it sends no object, as {"message": ...}
+    message: str
+
+
 Name = Annotated[str, Field(min_length=1, max_length=255)]
 Password = Annotated[
     str, Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
@@ -65,3 +70,11 @@ class UserCreate(RequestModel):
     email: EmailStr
     password: Password
     groups: list[int] = Field(default_factory=list)
+
+
+class UserUpdate(RequestModel):
+    # Every field may be left out; the frontend sends name and email.
+    name: Name | None = None
+    email: EmailStr | None = None
+    password: Password | None = None
+    groups: list[int] | None = None

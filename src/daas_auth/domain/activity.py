@@ -16,6 +16,9 @@ class Action(StrEnum):
     TOKEN_REFRESH = "token_refresh"  # noqa: S105
     PASSWORD_REHASH = "password_rehash"  # noqa: S105
     USER_CREATE = "user_create"
+    USER_UPDATE = "user_update"
+    USER_ENABLE = "user_enable"
+    USER_DISABLE = "user_disable"
 
 
 def record(

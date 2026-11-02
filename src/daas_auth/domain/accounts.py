@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,14 @@ from daas_auth.domain.activity import Action, record
 from daas_auth.domain.emails import normalise_email
 from daas_auth.domain.errors import Refused
 from daas_auth.domain.passwords import hash_password
-from daas_auth.models import Role, User, UserGroup, UserRole, UserToUserGroup
+from daas_auth.models import (
+    OAuth2Token,
+    Role,
+    User,
+    UserGroup,
+    UserRole,
+    UserToUserGroup,
+)
 
 # New passwords: no rules on the kind of characters, only the length.
 MIN_PASSWORD_LENGTH = 15
@@ -48,6 +55,14 @@ def find_account(session: Session, user_id: int) -> User:
     if account is None:
         raise Refused(404, f"No account has the id {user_id}.")
     return account
+
+
+def find_user(session: Session, user_id: int) -> User:
+    """A user who is not an admin: admins have routes of their own."""
+    user = session.get(User, user_id)
+    if user is None or is_admin(session, user_id):
+        raise Refused(404, f"No user has the id {user_id}.")
+    return user
 
 
 def group_ids(session: Session, user_id: int) -> list[int]:
@@ -98,6 +113,83 @@ def create_account(
         )
     _log(session, Action.USER_CREATE, account.id, actor, now)
     return account
+
+
+def update_user(
+    session: Session,
+    user_id: int,
+    *,
+    name: str | None,
+    email: str | None,
+    password: str | None,
+    groups: list[int] | None,
+    actor: Actor,
+    now: datetime,
+) -> User:
+    """
+    Only the fields that were sent. A new password ends every session of the user.
+    """
+    user = find_user(session, user_id)
+    if name is not None:
+        user.name = name
+    if email is not None:
+        user.email = normalise_email(email)
+    if password is not None:
+        user.password = hash_password(password)
+        _revoke_tokens(session, user.id, actor, now)
+    if groups is not None:
+        _replace_groups(session, user.id, _known_groups(session, groups), actor, now)
+    user.updated_at, user.updated_by = now, actor.id
+    try:
+        session.flush()
+    except IntegrityError:
+        raise Refused(409, "An account with this email exists already.") from None
+    _log(session, Action.USER_UPDATE, user.id, actor, now)
+    return user
+
+
+def set_enabled(
+    session: Session, user_id: int, enabled: bool, *, actor: Actor, now: datetime
+) -> User:
+    """
+    A disabled user is refused at once: the bearer check reads enabled on every request.
+    """
+    user = find_user(session, user_id)
+    user.enabled = enabled
+    user.updated_at, user.updated_by = now, actor.id
+    action = Action.USER_ENABLE if enabled else Action.USER_DISABLE
+    _log(session, action, user.id, actor, now)
+    return user
+
+
+def _revoke_tokens(session: Session, user_id: int, actor: Actor, now: datetime) -> None:
+    session.execute(
+        update(OAuth2Token)
+        .where(OAuth2Token.user_id == user_id, OAuth2Token.revoked_at.is_(None))
+        .values(revoked_at=now, updated_at=now, updated_by=actor.id)
+    )
+
+
+def _replace_groups(
+    session: Session, user_id: int, groups: list[int], actor: Actor, now: datetime
+) -> None:
+    links = UserToUserGroup.user_id == user_id
+    gone = UserToUserGroup.user_group_id.not_in(groups)
+    # Stamped before the delete, so the row's history says who removed it.
+    session.execute(
+        update(UserToUserGroup)
+        .where(links, gone)
+        .values(updated_at=now, updated_by=actor.id)
+    )
+    session.execute(delete(UserToUserGroup).where(links, gone))
+    kept = set(session.scalars(select(UserToUserGroup.user_group_id).where(links)))
+    for group_id in groups:
+        if group_id not in kept:
+            session.add(
+                UserToUserGroup(
+                    user_id=user_id, user_group_id=group_id, **_stamp(actor, now)
+                )
+            )
 
 
 def _known_groups(session: Session, groups: list[int]) -> list[int]:

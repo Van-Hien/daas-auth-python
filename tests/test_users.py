@@ -166,3 +166,91 @@ def add_groups(app: FastAPI, *ids: int) -> None:
                 )
             )
         session.commit()
+
+
+def user_form(email: str, password: str) -> dict[str, str]:
+    return {
+        "grant_type": "password",
+        "username": email,
+        "password": password,
+        "client_id": "test-client",
+        "scope": "user",
+    }
+
+
+def test_an_admin_enables_and_disables_a_user(
+    client: TestClient, admin: dict[str, str]
+) -> None:
+    anna = client.post("/user", json=new_user(), headers=admin).json()["id"]
+    enabled = client.post(f"/user/{anna}/enable", headers=admin)
+    assert (enabled.status_code, enabled.json()["enabled"]) == (200, True)
+    form = user_form("anna@x.de", "a-long-enough-pw")
+    token = client.post("/oauth2/user/token", data=form).json()["access_token"]
+    session = {"Authorization": f"Bearer {token}"}
+    assert client.get("/oauth2/user/session", headers=session).status_code == 200
+
+    disabled = client.post(f"/user/{anna}/disable", headers=admin)
+    assert (disabled.status_code, disabled.json()["enabled"]) == (200, False)
+    assert client.get("/oauth2/user/session", headers=session).status_code == 401
+
+
+def test_patch_changes_only_what_was_sent(
+    app: FastAPI, client: TestClient, admin: dict[str, str]
+) -> None:
+    add_groups(app, 1, 2)
+    anna = client.post("/user", json=new_user(groups=[1]), headers=admin).json()["id"]
+    response = client.patch(
+        f"/user/{anna}", json={"name": "Anna B", "groups": [2]}, headers=admin
+    )
+    assert (response.status_code, response.json()) == (200, {"message": "User updated"})
+    assert client.get(f"/user/{anna}", headers=admin).json() | {"id": 0} == {
+        "id": 0,
+        "name": "Anna B",
+        "email": "anna@x.de",
+        "role": "user",
+        "groups": [2],
+        "enabled": False,
+    }
+
+
+def test_a_new_password_ends_the_users_sessions(
+    client: TestClient, admin: dict[str, str]
+) -> None:
+    anna = client.post("/user", json=new_user(), headers=admin).json()["id"]
+    client.post(f"/user/{anna}/enable", headers=admin)
+    old = client.post(
+        "/oauth2/user/token", data=user_form("anna@x.de", "a-long-enough-pw")
+    )
+    session = {"Authorization": f"Bearer {old.json()['access_token']}"}
+
+    new_password = {"password": "another-long-pw-2"}
+    assert (
+        client.patch(f"/user/{anna}", json=new_password, headers=admin).status_code
+        == 200
+    )
+    assert client.get("/oauth2/user/session", headers=session).status_code == 401
+    form = user_form("anna@x.de", "another-long-pw-2")
+    assert client.post("/oauth2/user/token", data=form).status_code == 200
+
+
+def test_refusals_of_the_user_changes(
+    client: TestClient,
+    admin: dict[str, str],
+    login: Login,
+    add_user: Callable[..., int],
+) -> None:
+    client.post("/user", json=new_user(email="bob@x.de"), headers=admin)
+    anna = client.post("/user", json=new_user(), headers=admin).json()["id"]
+    taken = client.patch(f"/user/{anna}", json={"email": "BOB@x.de"}, headers=admin)
+    assert taken.status_code == 409
+    me = client.get("/oauth2/user/session", headers=admin).json()["user_id"]
+    for path in (f"/user/{me}/disable", "/user/999/enable"):  # an admin is no user
+        response = client.post(path, headers=admin)
+        assert (response.status_code, response.headers["content-type"]) == (
+            404,
+            PROBLEM,
+        )
+    add_user("carl@x.de", hash_password("carl-pw-1"))
+    user = login("carl@x.de", "carl-pw-1", "user")
+    assert client.post(f"/user/{anna}/enable", headers=user).status_code == 403
+    assert client.patch(f"/user/{anna}", json={}, headers=user).status_code == 403
