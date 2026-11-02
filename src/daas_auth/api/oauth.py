@@ -1,7 +1,10 @@
 """The OAuth routes of PHP's OAuth2HttpController, at the same paths."""
 
+from functools import partial
 from typing import Annotated
 
+import anyio
+from anyio.to_thread import run_sync
 from fastapi import APIRouter, Depends, Request, Response
 
 from daas_auth.api.auth import AuthCaller, DbSession, Now, require_scope
@@ -9,10 +12,13 @@ from daas_auth.domain.grants import token_response
 
 public_router = APIRouter()  # the login itself can't need a token
 router = APIRouter()  # app.py adds the bearer check to every route here
+# Argon2id takes 19 MiB and one CPU core per hash. At most 4 logins hash at once;
+# the others wait in the event loop, so the thread pool stays free for the bearer check.
+_HASHING = anyio.CapacityLimiter(4)
 
 
 async def raw_body(request: Request) -> str:
-    # async, because reading the body awaits; the route itself stays sync
+    # async, because reading the body awaits
     return (await request.body()).decode(errors="replace")
 
 
@@ -20,15 +26,24 @@ RawBody = Annotated[str, Depends(raw_body)]
 
 
 @public_router.post("/oauth2/user/token")
-def token(body: RawBody, request: Request, session: DbSession, at: Now) -> Response:
+async def token(
+    body: RawBody, request: Request, session: DbSession, at: Now
+) -> Response:
     """
     Behind nginx, request.client is the browser (uvicorn's proxy headers);
     Quart calls 127.0.0.1 directly.
     """
     source_ip = request.client.host if request.client else None
-    answer = token_response(
-        session, uri=str(request.url), body=body, now=at, source_ip=source_ip
+    run = partial(
+        token_response,
+        session,
+        uri=str(request.url),
+        body=body,
+        now=at,
+        source_ip=source_ip,
     )
+    answer = await run_sync(run, limiter=_HASHING)
+
     return Response(answer.body, answer.status, answer.headers)
 
 

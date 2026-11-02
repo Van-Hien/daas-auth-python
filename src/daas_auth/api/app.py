@@ -9,7 +9,7 @@ from daas_auth.api.auth import authenticated
 from daas_auth.api.errors import bearer_error_response
 from daas_auth.api.health import public_router
 from daas_auth.config import Settings, load_settings
-from daas_auth.db import check_strict_mode, make_engine
+from daas_auth.db import check_strict_mode, enforce_foreign_keys, make_engine
 from daas_auth.domain.errors import BearerError
 
 
@@ -18,6 +18,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Connect once now: an unreachable or non-strict database stops the start.
     engine = make_engine(settings.database_url)
+    # enforce FK for test DB (SQLite)
+    enforce_foreign_keys(engine)
     with engine.connect() as connection:
         check_strict_mode(connection)
 
