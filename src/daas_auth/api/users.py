@@ -7,9 +7,10 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
-from daas_auth.api.auth import DbSession, require_scope
+from daas_auth.api.auth import Acting, DbSession, Now, require_scope
 from daas_auth.api.schemas import (
     AdminPublic,
+    UserCreate,
     UserGroupPublic,
     UserPublic,
 )
@@ -19,6 +20,27 @@ from daas_auth.models import User, UserGroup, UserToUserGroup
 
 # In PHP every route here needs the admin scope (security: oauth2-user admin).
 router = APIRouter(dependencies=[Depends(require_scope("admin"))])
+
+
+@router.post("/user")
+def user_create(
+    body: UserCreate, session: DbSession, actor: Acting, at: Now
+) -> UserPublic:
+    """
+    The admin dashboard's Create an account. Admin only, unlike PHP; it starts disabled.
+    """
+    user = accounts.create_account(
+        session,
+        name=body.name,
+        email=body.email,
+        password=body.password,
+        role="user",
+        groups=body.groups,
+        actor=actor,
+        now=at,
+    )
+    session.commit()
+    return UserPublic.of(user, accounts.group_ids(session, user.id))
 
 
 @router.get("/users")

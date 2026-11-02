@@ -9,6 +9,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
+from daas_auth.domain.accounts import Actor
 from daas_auth.domain.bearer import Caller, authenticate
 from daas_auth.domain.errors import insufficient_scope
 
@@ -33,6 +34,15 @@ def authenticated(request: Request, session: DbSession, at: Now) -> Caller:
 
 
 AuthCaller = Annotated[Caller, Depends(authenticated)]
+
+
+def act(request: Request, caller: AuthCaller) -> Actor:
+    # Behind nginx, request.client is the browser (uvicorn's proxy headers).
+    source_ip = request.client.host if request.client else None
+    return Actor(caller.user.id, caller.user.email, source_ip)
+
+
+Acting = Annotated[Actor, Depends(act)]
 
 
 def require_scope(scope: str) -> Callable[[Caller], Caller]:

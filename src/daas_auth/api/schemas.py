@@ -3,10 +3,11 @@ The JSON shapes the API answers with, as PHP sends them.
 A ...Public model is what a client is shown, not a route without a token.
 """
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from daas_auth.domain.accounts import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
 from daas_auth.models import User
 
 
@@ -46,3 +47,21 @@ class AdminPublic(PublicModel):
 class UserGroupPublic(PublicModel):
     id: int
     description: str
+
+
+Name = Annotated[str, Field(min_length=1, max_length=255)]
+Password = Annotated[
+    str, Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
+]
+
+
+class RequestModel(BaseModel):
+    # A field the route doesn't know is 400, never silently dropped.
+    model_config = ConfigDict(extra="forbid")
+
+
+class UserCreate(RequestModel):
+    name: Name
+    email: EmailStr
+    password: Password
+    groups: list[int] = Field(default_factory=list)

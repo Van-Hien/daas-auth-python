@@ -1,8 +1,13 @@
 from collections.abc import Callable
+from datetime import datetime
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from daas_auth.domain.passwords import hash_password
+from daas_auth.models import ActivityLog, User, UserGroup
 
 PROBLEM = "application/problem+json"
 Login = Callable[..., dict[str, str]]
@@ -56,3 +61,108 @@ def test_an_unknown_id_is_404_problem(
     assert response.status_code == 404
     assert response.headers["content-type"] == PROBLEM
     assert response.json()["detail"] == "No account has the id 999."
+
+
+def new_user(**fields: object) -> dict[str, object]:
+    return {
+        "name": "Anna",
+        "email": "Anna@X.de",
+        "password": "a-long-enough-pw",
+        "groups": [],
+    } | fields
+
+
+def test_an_admin_creates_a_disabled_user_in_a_group(
+    app: FastAPI, client: TestClient, admin: dict[str, str]
+) -> None:
+    add_groups(app, 1, 2)
+    response = client.post("/user", json=new_user(groups=[2, 1, 2]), headers=admin)
+    assert response.status_code == 200
+    created = response.json()
+    assert created | {"id": 0} == {
+        "id": 0,
+        "name": "Anna",
+        "email": "anna@x.de",
+        "role": "user",
+        "groups": [1, 2],
+        "enabled": False,
+    }
+    me = client.get("/oauth2/user/session", headers=admin).json()["user_id"]
+    with Session(app.state.engine) as session:
+        user = session.get_one(User, created["id"])
+        assert (user.created_by, user.updated_by) == (me, me)
+        assert user.password.startswith("$argon2id$")
+        row = session.scalars(
+            select(ActivityLog).order_by(ActivityLog.id.desc())
+        ).first()
+        assert row is not None
+        assert (row.action, row.target_id, row.created_by) == (
+            "user_create",
+            created["id"],
+            me,
+        )
+
+
+def test_a_new_user_cannot_log_in_before_an_admin_enables_them(
+    client: TestClient, admin: dict[str, str]
+) -> None:
+    client.post("/user", json=new_user(), headers=admin)
+    form = {
+        "grant_type": "password",
+        "username": "anna@x.de",
+        "password": "a-long-enough-pw",
+        "client_id": "test-client",
+        "scope": "user",
+    }
+    assert client.post("/oauth2/user/token", data=form).status_code == 400
+
+
+def test_creating_a_user_needs_an_admin(
+    client: TestClient, login: Login, add_user: Callable[..., int]
+) -> None:
+    assert client.post("/user", json=new_user()).status_code == 401
+    add_user("bob@x.de", hash_password("bob-pw-1"))
+    user = login("bob@x.de", "bob-pw-1", "user")
+    assert client.post("/user", json=new_user(), headers=user).status_code == 403
+
+
+def test_refusals_of_post_user(
+    app: FastAPI, client: TestClient, admin: dict[str, str]
+) -> None:
+    add_groups(app, 1)
+    cases = [
+        (new_user(groups=[1, 7, 8]), 400, "No user group has the id 7, 8."),
+        (new_user(password="short"), 400, None),
+        (new_user(email="no-at-sign"), 400, None),
+        (new_user(role="admin"), 400, None),  # unknown fields are refused
+        ({"name": "incomplete"}, 400, None),  # the suite's row 7
+    ]
+    for body, status, detail in cases:
+        response = client.post("/user", json=body, headers=admin)
+        assert (response.status_code, response.headers["content-type"]) == (
+            status,
+            PROBLEM,
+        ), body
+        if detail:
+            assert response.json()["detail"] == detail
+    assert client.post("/user", json=new_user(), headers=admin).status_code == 200
+    again = client.post("/user", json=new_user(email=" anna@x.DE"), headers=admin)
+    assert (again.status_code, again.json()["detail"]) == (
+        409,
+        "An account with this email exists already.",
+    )
+
+
+def add_groups(app: FastAPI, *ids: int) -> None:
+    now = datetime(2026, 11, 3)
+    with Session(app.state.engine) as session:
+        for group_id in ids:
+            session.add(
+                UserGroup(
+                    id=group_id,
+                    description=f"g{group_id}",
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        session.commit()
