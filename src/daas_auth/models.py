@@ -138,13 +138,13 @@ class DesktopGroupUserGroup(Audited, Base):
     __tablename__ = "desktopgroup_usergroup"
     __table_args__ = MYSQL
 
-    desktopgroup_id: Mapped[int] = mapped_column(
+    desktop_group_id: Mapped[int] = mapped_column(
         ID,
         ForeignKey("desktop_groups.id", ondelete="CASCADE"),
         primary_key=True,
         index=True,
     )
-    usergroup_id: Mapped[int] = mapped_column(
+    user_group_id: Mapped[int] = mapped_column(
         ID,
         ForeignKey("user_groups.id", ondelete="CASCADE"),
         primary_key=True,

@@ -192,6 +192,36 @@ def test_0010_a_quart_object_is_at_most_one_desktop(sqlite: Connection) -> None:
         sqlite.execute(desktops.insert(), row | {"quart_object_id": "templateWin10"})
 
 
+def test_0011_keeps_the_desktop_group_links(sqlite: Connection) -> None:
+    config = alembic_config(sqlite)
+    command.upgrade(config, "0010")
+    now = datetime(2026, 11, 3)
+    stamp = {"created_at": now, "updated_at": now}
+    for name in ("desktop_groups", "user_groups"):
+        groups = sa.table(
+            name,
+            sa.column("id"),
+            sa.column("description"),
+            sa.column("created_at", sa.DateTime()),
+            sa.column("updated_at", sa.DateTime()),
+        )
+        sqlite.execute(groups.insert(), {"id": 7, "description": "g"} | stamp)
+    links = sa.table(
+        "desktopgroup_usergroup",
+        sa.column("desktopgroup_id"),
+        sa.column("usergroup_id"),
+        sa.column("created_at", sa.DateTime()),
+        sa.column("updated_at", sa.DateTime()),
+    )
+    sqlite.execute(links.insert(), {"desktopgroup_id": 7, "usergroup_id": 7} | stamp)
+    command.upgrade(config, "0011")
+    renamed = "SELECT desktop_group_id, user_group_id FROM desktopgroup_usergroup"
+    assert sqlite.exec_driver_sql(renamed).all() == [(7, 7)]
+    command.downgrade(config, "0010")
+    old = "SELECT desktopgroup_id, usergroup_id FROM desktopgroup_usergroup"
+    assert sqlite.exec_driver_sql(old).all() == [(7, 7)]
+
+
 @pytest.fixture
 def migrated(mariadb_migrate: Connection) -> Iterator[None]:
     """daas_auth_test at head for one test, emptied again afterwards."""
