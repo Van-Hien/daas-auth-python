@@ -11,9 +11,9 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from daas_auth.db import make_engine
-from daas_auth.domain.accounts import delete_user
+from daas_auth.domain.accounts import create_account, delete_user, update_user
 from daas_auth.domain.activity import Actor
-from daas_auth.models import Role, User, UserRole
+from daas_auth.models import Role, User, UserGroup, UserRole
 
 
 def alembic_config(connection: Connection) -> Config:
@@ -311,3 +311,40 @@ def test_deleting_a_user_on_mariadb(migrated: None, mariadb: Connection) -> None
     # FOR SYSTEM_TIME has no SQLAlchemy form: a fixed SQL text, MariaDB only (N-2).
     history = "SELECT updated_by FROM user_roles FOR SYSTEM_TIME ALL ORDER BY row_end"
     assert mariadb.exec_driver_sql(history).scalars().all() == [None, 99]
+
+
+@pytest.mark.mariadb
+def test_group_links_keep_who_removed_them(migrated: None, mariadb: Connection) -> None:
+    now = datetime(2026, 11, 3)
+    with Session(bind=mariadb) as session:
+        session.add(UserGroup(id=7, description="g", created_at=now, updated_at=now))
+        session.flush()
+        user = create_account(
+            session,
+            name="a",
+            email="a@x.de",
+            password="a-long-enough-pw",
+            role="user",
+            groups=[7],
+            actor=Actor(99, "admin@x.de", None),
+            now=now,
+        )
+        session.commit()
+        update_user(
+            session,
+            user.id,
+            name=None,
+            email=None,
+            password=None,
+            groups=[],
+            actor=Actor(98, "other@x.de", None),
+            now=now,
+        )
+        session.commit()
+
+    # FOR SYSTEM_TIME has no SQLAlchemy form: a fixed SQL text, MariaDB only (N-2).
+    history = (
+        "SELECT updated_by FROM users_to_user_groups FOR SYSTEM_TIME ALL"
+        " ORDER BY row_end"
+    )
+    assert mariadb.exec_driver_sql(history).scalars().all() == [99, 98]
