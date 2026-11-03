@@ -11,7 +11,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from daas_auth.db import make_engine
-from daas_auth.domain.accounts import Actor, delete_user
+from daas_auth.domain.accounts import delete_user
+from daas_auth.domain.activity import Actor
 from daas_auth.models import Role, User, UserRole
 
 

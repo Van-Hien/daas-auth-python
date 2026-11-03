@@ -1,9 +1,12 @@
 """
-activity_log rows. The service only ever inserts there, through record().
+activity_log rows, and the audit columns of every change.
+The service only ever inserts there, through record().
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -55,4 +58,49 @@ def record(
             updated_at=now,
             updated_by=actor_id,
         )
+    )
+
+
+@dataclass(frozen=True)
+class Actor:
+    """
+    The actor (probably admin) who makes a change: for the _by columns and activity_log.
+    """
+
+    id: int
+    email: str
+    source_ip: str | None
+
+
+def stamp(actor: Actor, now: datetime) -> dict[str, Any]:
+    # On insert, updated_* get the same values as created_*.
+    return {
+        "created_at": now,
+        "created_by": actor.id,
+        "updated_at": now,
+        "updated_by": actor.id,
+    }
+
+
+def log_change(
+    session: Session,
+    action: Action,
+    table: str,
+    target_id: int,
+    actor: Actor,
+    now: datetime,
+) -> None:
+    """
+    One ok row for a change an actor made to one row of table.
+    """
+    record(
+        session,
+        action,
+        ok=True,
+        now=now,
+        actor_id=actor.id,
+        actor_email=actor.email,
+        target_table=table,
+        target_id=target_id,
+        source_ip=actor.source_ip,
     )

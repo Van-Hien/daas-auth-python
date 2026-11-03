@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
-from daas_auth.domain.accounts import Actor
+from daas_auth.domain.activity import Actor
 from daas_auth.domain.bearer import Caller, authenticate
 from daas_auth.domain.errors import insufficient_scope
 

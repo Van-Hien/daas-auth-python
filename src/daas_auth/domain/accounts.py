@@ -4,16 +4,14 @@ Users and admins accounts.
 Every change stamps the audit columns and writes one activity_log row; the route commits.
 """
 
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from daas_auth.domain.activity import Action, record
+from daas_auth.domain.activity import Action, Actor, log_change, record, stamp
 from daas_auth.domain.emails import normalise_email
 from daas_auth.domain.errors import Refused
 from daas_auth.domain.passwords import hash_password
@@ -32,17 +30,6 @@ MAX_PASSWORD_LENGTH = 128
 
 # The ids of the accounts that hold the admin role.
 ADMINS = select(UserRole.user_id).join(Role).where(Role.name == "admin")
-
-
-@dataclass(frozen=True)
-class Actor:
-    """
-    The actor (probably admin) who makes a change: for the _by columns and activity_log.
-    """
-
-    id: int
-    email: str
-    source_ip: str | None
 
 
 def is_admin(session: Session, user_id: int) -> bool:
@@ -109,7 +96,7 @@ def create_account(
         email=normalise_email(email),
         password=hash_password(password),
         enabled=role == "admin",
-        **_stamp(actor, now),
+        **stamp(actor, now),
     )
     session.add(account)
     try:
@@ -117,15 +104,15 @@ def create_account(
     except IntegrityError:
         raise Refused(409, "An account with this email exists already.") from None
     role_id = session.scalars(select(Role.id).where(Role.name == role)).one()
-    session.add(UserRole(user_id=account.id, role_id=role_id, **_stamp(actor, now)))
+    session.add(UserRole(user_id=account.id, role_id=role_id, **stamp(actor, now)))
     for group_id in groups:
         session.add(
             UserToUserGroup(
-                user_id=account.id, user_group_id=group_id, **_stamp(actor, now)
+                user_id=account.id, user_group_id=group_id, **stamp(actor, now)
             )
         )
     action = Action.ADMIN_CREATE if role == "admin" else Action.USER_CREATE
-    _log(session, action, account.id, actor, now)
+    log_change(session, action, "users", account.id, actor, now)
     return account
 
 
@@ -158,7 +145,7 @@ def update_user(
         session.flush()
     except IntegrityError:
         raise Refused(409, "An account with this email exists already.") from None
-    _log(session, Action.USER_UPDATE, user.id, actor, now)
+    log_change(session, Action.USER_UPDATE, "users", user.id, actor, now)
     return user
 
 
@@ -172,7 +159,7 @@ def set_enabled(
     user.enabled = enabled
     user.updated_at, user.updated_by = now, actor.id
     action = Action.USER_ENABLE if enabled else Action.USER_DISABLE
-    _log(session, action, user.id, actor, now)
+    log_change(session, action, "users", user.id, actor, now)
     return user
 
 
@@ -233,7 +220,7 @@ def _delete_account(
         )
         session.execute(delete(link).where(mine))
     session.delete(account)
-    _log(session, action, account.id, actor, now)
+    log_change(session, action, "users", account.id, actor, now)
 
 
 def _revoke_tokens(session: Session, user_id: int, actor: Actor, now: datetime) -> None:
@@ -261,7 +248,7 @@ def _replace_groups(
         if group_id not in kept:
             session.add(
                 UserToUserGroup(
-                    user_id=user_id, user_group_id=group_id, **_stamp(actor, now)
+                    user_id=user_id, user_group_id=group_id, **stamp(actor, now)
                 )
             )
 
@@ -275,29 +262,3 @@ def _known_groups(session: Session, groups: list[int]) -> list[int]:
         listed = ", ".join(str(group_id) for group_id in unknown)
         raise Refused(400, f"No user group has the id {listed}.")
     return wanted
-
-
-def _stamp(actor: Actor, now: datetime) -> dict[str, Any]:
-    # On insert, updated_* get the same values as created_*.
-    return {
-        "created_at": now,
-        "created_by": actor.id,
-        "updated_at": now,
-        "updated_by": actor.id,
-    }
-
-
-def _log(
-    session: Session, action: Action, target_id: int, actor: Actor, now: datetime
-) -> None:
-    record(
-        session,
-        action,
-        ok=True,
-        now=now,
-        actor_id=actor.id,
-        actor_email=actor.email,
-        target_table="users",
-        target_id=target_id,
-        source_ip=actor.source_ip,
-    )
