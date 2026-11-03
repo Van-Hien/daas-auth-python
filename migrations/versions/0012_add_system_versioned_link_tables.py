@@ -26,7 +26,7 @@ TABLES = (
 
 def upgrade() -> None:
     if op.get_bind().dialect.name in ("mysql", "mariadb"):
-        # N-2: MariaDB keeps every old version of a row. SQLite has no such thing.
+        # MariaDB keeps every old version of a row. SQLite has no such thing.
         for table in TABLES:
             op.execute(f"ALTER TABLE {table} ADD SYSTEM VERSIONING")
 

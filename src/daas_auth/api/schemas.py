@@ -5,14 +5,14 @@ A ...Public model is what a client is shown, not a route without a token.
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
 from daas_auth.domain.accounts import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
 from daas_auth.models import User
 
 
 class PublicModel(BaseModel):
-    # read the fields off an ORM object: AdminResponseDto.model_validate(user)
+    # read the fields off an ORM object: AdminPublic.model_validate(user)
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -55,6 +55,10 @@ class Message(BaseModel):
 
 
 Name = Annotated[str, Field(min_length=1, max_length=255)]
+# Spaces at the ends are cut off; a description of only spaces is 400, as in PHP.
+Description = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
+]
 Password = Annotated[
     str, Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
 ]
@@ -89,3 +93,14 @@ class AdminCreate(RequestModel):
 class RegistrationCode(RequestModel):
     email: EmailStr
     registration_code: Annotated[str, Field(min_length=8)]  # PHP's length
+
+
+class UserGroupCreate(RequestModel):
+    description: Description
+
+
+class UserGroupUpdate(RequestModel):
+    # PATCH: only what is sent changes. The dashboard sends the description only.
+    description: Description | None = None
+    # PHP's name. Replaces the members when sent.
+    user_ids: list[int] | None = Field(default=None, alias="userIds")

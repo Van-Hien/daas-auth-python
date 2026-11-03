@@ -75,7 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         oauth.router,
         users.admin_router,
         admins.admin_router,
-        user_groups.router,
+        user_groups.admin_router,
         without_mail.user_router,
     ):
         app.include_router(router, dependencies=[Depends(authenticated)])

@@ -1,5 +1,5 @@
 """
-Users and admins accounts.
+Users' and admins' accounts.
 
 Every change stamps the audit columns and writes one activity_log row; the route commits.
 """
@@ -7,19 +7,20 @@ Every change stamps the audit columns and writes one activity_log row; the route
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from daas_auth.domain import links
 from daas_auth.domain.activity import Action, Actor, log_change, record, stamp
 from daas_auth.domain.emails import normalise_email
 from daas_auth.domain.errors import Refused
 from daas_auth.domain.passwords import hash_password
+from daas_auth.domain.user_groups import known_user_groups
 from daas_auth.models import (
     OAuth2Token,
     Role,
     User,
-    UserGroup,
     UserRole,
     UserToUserGroup,
 )
@@ -89,7 +90,7 @@ def create_account(
     """
     A user starts disabled and waits for an admin; an admin starts enabled, as in PHP.
     """
-    groups = _known_groups(session, groups)
+    groups = known_user_groups(session, groups)
     account = User(
         guid=str(uuid4()),
         name=name,
@@ -139,7 +140,16 @@ def update_user(
         user.password = hash_password(password)
         _revoke_tokens(session, user.id, actor, now)
     if groups is not None:
-        _replace_groups(session, user.id, _known_groups(session, groups), actor, now)
+        links.replace(
+            session,
+            UserToUserGroup,
+            UserToUserGroup.user_id,
+            user.id,
+            UserToUserGroup.user_group_id,
+            known_user_groups(session, groups),
+            actor=actor,
+            now=now,
+        )
     user.updated_at, user.updated_by = now, actor.id
     try:
         session.flush()
@@ -213,12 +223,7 @@ def _delete_account(
     refuses the user while they exist. Its tokens go with it (ON DELETE CASCADE).
     """
     for link in (UserRole, UserToUserGroup):
-        mine = link.user_id == account.id
-        # Stamped before the delete, so the row's history says who removed it.
-        session.execute(
-            update(link).where(mine).values(updated_at=now, updated_by=actor.id)
-        )
-        session.execute(delete(link).where(mine))
+        links.remove(session, link, link.user_id == account.id, actor=actor, now=now)
     session.delete(account)
     log_change(session, action, "users", account.id, actor, now)
 
@@ -229,36 +234,3 @@ def _revoke_tokens(session: Session, user_id: int, actor: Actor, now: datetime) 
         .where(OAuth2Token.user_id == user_id, OAuth2Token.revoked_at.is_(None))
         .values(revoked_at=now, updated_at=now, updated_by=actor.id)
     )
-
-
-def _replace_groups(
-    session: Session, user_id: int, groups: list[int], actor: Actor, now: datetime
-) -> None:
-    links = UserToUserGroup.user_id == user_id
-    gone = UserToUserGroup.user_group_id.not_in(groups)
-    # Stamped before the delete, so the row's history says who removed it.
-    session.execute(
-        update(UserToUserGroup)
-        .where(links, gone)
-        .values(updated_at=now, updated_by=actor.id)
-    )
-    session.execute(delete(UserToUserGroup).where(links, gone))
-    kept = set(session.scalars(select(UserToUserGroup.user_group_id).where(links)))
-    for group_id in groups:
-        if group_id not in kept:
-            session.add(
-                UserToUserGroup(
-                    user_id=user_id, user_group_id=group_id, **stamp(actor, now)
-                )
-            )
-
-
-def _known_groups(session: Session, groups: list[int]) -> list[int]:
-    """The ids once each, or 400: a group that doesn't exist is never dropped."""
-    wanted = sorted(set(groups))
-    known = set(session.scalars(select(UserGroup.id).where(UserGroup.id.in_(wanted))))
-    unknown = [group_id for group_id in wanted if group_id not in known]
-    if unknown:
-        listed = ", ".join(str(group_id) for group_id in unknown)
-        raise Refused(400, f"No user group has the id {listed}.")
-    return wanted

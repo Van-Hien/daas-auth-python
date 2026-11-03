@@ -1,6 +1,6 @@
 """
 activity_log rows, and the audit columns of every change.
-The service only ever inserts there, through record().
+The service only ever inserts into activity_log, through record().
 """
 
 from dataclasses import dataclass
@@ -26,6 +26,9 @@ class Action(StrEnum):
     ADMIN_CREATE = "admin_create"
     ADMIN_DELETE = "admin_delete"
     APPLICATION_REQUEST = "application_request"
+    USER_GROUP_CREATE = "user_group_create"
+    USER_GROUP_UPDATE = "user_group_update"
+    USER_GROUP_DELETE = "user_group_delete"
 
 
 def record(
@@ -64,7 +67,8 @@ def record(
 @dataclass(frozen=True)
 class Actor:
     """
-    The actor (probably admin) who makes a change: for the _by columns and activity_log.
+    The actor (probably admin) who makes a change,
+    for the _by columns and activity_log.
     """
 
     id: int
