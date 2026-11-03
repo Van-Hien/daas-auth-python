@@ -108,6 +108,10 @@ class Desktop(Audited, Base):
 
     id: Mapped[int] = mapped_column(ID, primary_key=True)
     description: Mapped[str] = mapped_column(String(255))
+    name: Mapped[str | None] = mapped_column(String(255))
+    # Quart's id for the machine this desktop is (a UUID or e.g. "templateWin10");
+    # the access check looks desktops up by it. None until an admin links one.
+    quart_object_id: Mapped[str | None] = mapped_column(String(255), unique=True)
 
 
 class DesktopGroup(Audited, Base):

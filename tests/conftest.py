@@ -9,7 +9,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import MetaData, select
 from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
@@ -57,8 +57,15 @@ def mariadb() -> Iterator[Connection]:
 def mariadb_migrate() -> Iterator[Connection]:
     """
     daas_migrate on daas_auth_test: Alembic's account, from .env.migrate.
+    Starts empty: an interrupted run may have left tables behind.
     """
-    yield from connect_test_database(load_migration_settings().database_url)
+    for connection in connect_test_database(load_migration_settings().database_url):
+        assert connection.engine.url.database == TEST_DATABASE  # never daas_auth
+        tables = MetaData()
+        tables.reflect(connection)
+        tables.drop_all(connection)
+        connection.commit()
+        yield connection
 
 
 # ---- API on SQLite ---------------------------------------------

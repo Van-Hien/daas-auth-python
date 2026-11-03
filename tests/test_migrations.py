@@ -7,7 +7,7 @@ import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
 from sqlalchemy.engine import Connection
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from daas_auth.db import make_engine
@@ -172,6 +172,24 @@ def test_two_spellings_of_one_email_stop_0005(sqlite: Connection) -> None:
     )
     with pytest.raises(RuntimeError, match="same email"):
         command.upgrade(config, "0005")
+
+
+def test_0010_a_quart_object_is_at_most_one_desktop(sqlite: Connection) -> None:
+    command.upgrade(alembic_config(sqlite), "0010")
+    desktops = sa.table(
+        "desktops",
+        sa.column("description"),
+        sa.column("quart_object_id"),
+        sa.column("created_at", sa.DateTime()),
+        sa.column("updated_at", sa.DateTime()),
+    )
+    now = datetime(2026, 11, 3)
+    row = {"description": "d", "created_at": now, "updated_at": now}
+    # Not linked yet: any number of desktops.
+    sqlite.execute(desktops.insert(), [row | {"quart_object_id": None}] * 2)
+    sqlite.execute(desktops.insert(), row | {"quart_object_id": "templateWin10"})
+    with pytest.raises(IntegrityError):
+        sqlite.execute(desktops.insert(), row | {"quart_object_id": "templateWin10"})
 
 
 @pytest.fixture
