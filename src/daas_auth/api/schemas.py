@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
 from daas_auth.domain.accounts import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
-from daas_auth.models import Desktop, User
+from daas_auth.models import Desktop, DesktopGroup, User
 
 
 class PublicModel(BaseModel):
@@ -71,8 +71,12 @@ class DesktopPublic(PublicModel):
 class DesktopGroupPublic(PublicModel):
     id: int
     description: str
-    # PHP's name in the JSON; built as DesktopGroupPublic(..., desktopIds=[...])
-    desktop_ids: list[int] = Field(alias="desktopIds")
+    desktop_ids: list[int] = Field(alias="desktopIds")  # PHP's name in the JSON
+
+    @classmethod
+    def of(cls, group: DesktopGroup, desktop_ids: list[int]) -> "DesktopGroupPublic":
+        # desktop_ids is not an attribute of DesktopGroup, so it is passed in
+        return cls(id=group.id, description=group.description, desktopIds=desktop_ids)
 
 
 class Message(BaseModel):

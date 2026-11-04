@@ -12,7 +12,11 @@ from sqlalchemy.orm import Session
 
 from daas_auth.domain import links
 from daas_auth.domain.activity import Action, Actor, log_change, stamp
-from daas_auth.domain.desktop_groups import known_desktop_groups
+from daas_auth.domain.desktop_groups import (
+    find_desktop_group,
+    known_desktop_groups,
+    log_link,
+)
 from daas_auth.domain.errors import Refused
 from daas_auth.models import Desktop, DesktopToDesktopGroup
 
@@ -104,6 +108,41 @@ def delete_desktop(
     )
     session.delete(desktop)
     log_change(session, Action.DESKTOP_DELETE, "desktops", desktop.id, actor, now)
+
+
+def add_to_group(
+    session: Session, desktop_id: int, group_id: int, *, actor: Actor, now: datetime
+) -> None:
+    desktop = find_desktop(session, desktop_id)
+    group = find_desktop_group(session, group_id)
+    session.add(
+        DesktopToDesktopGroup(
+            desktop_id=desktop.id, desktop_group_id=group.id, **stamp(actor, now)
+        )
+    )
+    try:
+        session.flush()  # the primary key decides, even when two requests race
+    except IntegrityError:
+        raise Refused(
+            409, f"Desktop {desktop_id} is in desktop group {group_id} already."
+        ) from None
+    log_link(session, group.id, f"desktop {desktop.id} added", actor, now)
+
+
+def remove_from_group(
+    session: Session, desktop_id: int, group_id: int, *, actor: Actor, now: datetime
+) -> None:
+    if session.get(DesktopToDesktopGroup, (desktop_id, group_id)) is None:
+        raise Refused(404, "That desktop is not in that desktop group.")
+    links.remove(
+        session,
+        DesktopToDesktopGroup,
+        DesktopToDesktopGroup.desktop_id == desktop_id,
+        DesktopToDesktopGroup.desktop_group_id == group_id,
+        actor=actor,
+        now=now,
+    )
+    log_link(session, group_id, f"desktop {desktop_id} removed", actor, now)
 
 
 def _set_groups(

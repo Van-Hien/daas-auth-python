@@ -34,6 +34,7 @@ class Action(StrEnum):
     DESKTOP_DELETE = "desktop_delete"
     DESKTOP_GROUP_CREATE = "desktop_group_create"
     DESKTOP_GROUP_DELETE = "desktop_group_delete"
+    DESKTOP_GROUP_UPDATE = "desktop_group_update"
 
 
 def record(
@@ -98,6 +99,7 @@ def log_change(
     target_id: int,
     actor: Actor,
     now: datetime,
+    details: str | None = None,
 ) -> None:
     """
     One ok row for a change an actor made to one row of table.
@@ -112,4 +114,5 @@ def log_change(
         target_table=table,
         target_id=target_id,
         source_ip=actor.source_ip,
+        details=details,
     )
