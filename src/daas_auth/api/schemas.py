@@ -79,6 +79,14 @@ class DesktopGroupPublic(PublicModel):
         return cls(id=group.id, description=group.description, desktopIds=desktop_ids)
 
 
+class AllowedDesktopPublic(PublicModel):
+    # What a user is shown of a desktop they may use: no group ids.
+    id: int
+    description: str
+    name: str | None
+    quart_object_id: str | None
+
+
 class Message(BaseModel):
     # PHP's answer where it sends no object, as {"message": ...}
     message: str

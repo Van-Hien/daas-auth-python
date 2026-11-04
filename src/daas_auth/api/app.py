@@ -14,6 +14,7 @@ from daas_auth.api.errors import (
     validation_error_response,
 )
 from daas_auth.api.routes import (
+    access,
     admins,
     desktop_groups,
     desktops,
@@ -75,6 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Default-deny: every router from here on runs the bearer check first.
     for router in (
         oauth.router,
+        access.router,
         users.admin_router,
         admins.admin_router,
         user_groups.admin_router,
