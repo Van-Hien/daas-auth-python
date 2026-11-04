@@ -23,6 +23,16 @@ class Refused(Exception):
         self.detail = detail
 
 
+def refuse_unknown(wanted: list[int], known: set[int], what: str) -> None:
+    """
+    422 for ids sent that name no row: a relation is never dropped silently.
+    """
+    unknown = [one for one in wanted if one not in known]
+    if unknown:
+        listed = ", ".join(str(one) for one in unknown)
+        raise Refused(422, f"No {what} has the id {listed}.")
+
+
 class BearerError(Exception):
     def __init__(
         self,

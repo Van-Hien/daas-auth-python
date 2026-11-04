@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from daas_auth.domain import links
 from daas_auth.domain.activity import Action, Actor, log_change, stamp
-from daas_auth.domain.errors import Refused
+from daas_auth.domain.errors import Refused, refuse_unknown
 from daas_auth.models import (
     DesktopGroupUserGroup,
     Role,
@@ -33,7 +33,7 @@ def known_user_groups(session: Session, ids: list[int]) -> list[int]:
     """The ids once each, or 400: a group that doesn't exist is never dropped."""
     wanted = sorted(set(ids))
     known = set(session.scalars(select(UserGroup.id).where(UserGroup.id.in_(wanted))))
-    _refuse_unknown(wanted, known, "user group")
+    refuse_unknown(wanted, known, "user group")
     return wanted
 
 
@@ -115,12 +115,5 @@ def _known_users(session: Session, ids: list[int]) -> list[int]:
             .where(User.id.in_(wanted), Role.name == "user")
         )
     )
-    _refuse_unknown(wanted, known, "user")
+    refuse_unknown(wanted, known, "user")
     return wanted
-
-
-def _refuse_unknown(wanted: list[int], known: set[int], what: str) -> None:
-    unknown = [one for one in wanted if one not in known]
-    if unknown:
-        listed = ", ".join(str(one) for one in unknown)
-        raise Refused(400, f"No {what} has the id {listed}.")

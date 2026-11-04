@@ -29,6 +29,9 @@ class Action(StrEnum):
     USER_GROUP_CREATE = "user_group_create"
     USER_GROUP_UPDATE = "user_group_update"
     USER_GROUP_DELETE = "user_group_delete"
+    DESKTOP_CREATE = "desktop_create"
+    DESKTOP_UPDATE = "desktop_update"
+    DESKTOP_DELETE = "desktop_delete"
 
 
 def record(

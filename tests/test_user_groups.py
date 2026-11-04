@@ -93,13 +93,13 @@ def test_refusals_of_patch_user_group(
         "/user_group", json={"description": "a"}, headers=admin
     ).json()["id"]
     me = client.get("/oauth2/user/session", headers=admin).json()["user_id"]
-    # A user id that doesn't exist, or an admin's: never dropped, 400.
+    # A user id that doesn't exist, or an admin's: never dropped, 422.
     for user_ids in ([999], [me]):
         response = client.patch(
             f"/user_group/{group_id}", json={"userIds": user_ids}, headers=admin
         )
         assert (response.status_code, response.headers["content-type"]) == (
-            400,
+            422,
             PROBLEM,
         )
     missing = client.patch("/user_group/999", json={"description": "b"}, headers=admin)

@@ -131,7 +131,7 @@ def test_refusals_of_post_user(
 ) -> None:
     add_groups(app, 1)
     cases = [
-        (new_user(groups=[1, 7, 8]), 400, "No user group has the id 7, 8."),
+        (new_user(groups=[1, 7, 8]), 422, "No user group has the id 7, 8."),
         (new_user(password="short"), 400, None),
         (new_user(email="no-at-sign"), 400, None),
         (new_user(role="admin"), 400, None),  # unknown fields are refused
