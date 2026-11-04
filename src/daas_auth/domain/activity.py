@@ -32,6 +32,8 @@ class Action(StrEnum):
     DESKTOP_CREATE = "desktop_create"
     DESKTOP_UPDATE = "desktop_update"
     DESKTOP_DELETE = "desktop_delete"
+    DESKTOP_GROUP_CREATE = "desktop_group_create"
+    DESKTOP_GROUP_DELETE = "desktop_group_delete"
 
 
 def record(

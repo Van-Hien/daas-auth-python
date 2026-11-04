@@ -68,6 +68,13 @@ class DesktopPublic(PublicModel):
         )
 
 
+class DesktopGroupPublic(PublicModel):
+    id: int
+    description: str
+    # PHP's name in the JSON; built as DesktopGroupPublic(..., desktopIds=[...])
+    desktop_ids: list[int] = Field(alias="desktopIds")
+
+
 class Message(BaseModel):
     # PHP's answer where it sends no object, as {"message": ...}
     message: str
@@ -130,7 +137,7 @@ class UserGroupUpdate(RequestModel):
 
 class DesktopCreate(RequestModel):
     description: Description
-    # Desktop-group ids. The dashboard sends objects ([{description}], F-12): 400.
+    # Desktop-group ids. The dashboard sends objects ([{description}]): 400.
     groups: list[int] = Field(default_factory=list)
     name: Name | None = None
     quart_object_id: QuartObjectId | None = None
@@ -142,3 +149,9 @@ class DesktopUpdate(RequestModel):
     groups: list[int] | None = None
     name: Name | None = None
     quart_object_id: QuartObjectId | None = None
+
+
+class DesktopGroupCreate(RequestModel):
+    description: Description
+    # PHP declared it and dropped it; here the desktops are stored.
+    desktop_ids: list[int] = Field(default_factory=list, alias="desktopIds")

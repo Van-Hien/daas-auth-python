@@ -15,6 +15,7 @@ from daas_auth.api.errors import (
 )
 from daas_auth.api.routes import (
     admins,
+    desktop_groups,
     desktops,
     health,
     oauth,
@@ -78,6 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         admins.admin_router,
         user_groups.admin_router,
         desktops.admin_router,
+        desktop_groups.admin_router,
         without_mail.user_router,
     ):
         app.include_router(router, dependencies=[Depends(authenticated)])
