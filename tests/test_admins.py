@@ -109,3 +109,27 @@ def test_the_user_routes_refuse_an_admin(
         assert f"/admin/{bea}" in response.json()["detail"]
     admins = client.get("/admins", headers=admin).json()
     assert [a["name"] for a in admins if a["id"] == bea] == ["Bea"]  # unchanged
+
+
+def test_an_admin_reads_an_admin(client: TestClient, admin: dict[str, str]) -> None:
+    bea = client.post("/admin", json=NEW_ADMIN, headers=admin).json()
+    response = client.get(f"/admin/{bea['id']}", headers=admin)
+    assert (response.status_code, response.json()) == (200, bea)
+
+
+def test_a_user_token_cannot_read_an_admin(
+    client: TestClient, add_user: Callable[..., int], login: Login
+) -> None:
+    add_user("anna@x.de", hash_password("anna-pw-1"))
+    headers = login("anna@x.de", "anna-pw-1", "user")
+    assert client.get("/admin/1", headers=headers).status_code == 403
+
+
+def test_reading_an_id_that_is_no_admin_is_404(
+    client: TestClient,
+    admin: dict[str, str],
+    add_user: Callable[..., int],
+) -> None:
+    anna = add_user("anna@x.de", hash_password("anna-pw-1"))
+    assert client.get("/admin/9999", headers=admin).status_code == 404
+    assert client.get(f"/admin/{anna}", headers=admin).status_code == 404

@@ -37,6 +37,11 @@ def admin_list(session: DbSession) -> list[AdminPublic]:
     return [AdminPublic.model_validate(admin) for admin in admins]
 
 
+@admin_router.get("/admin/{admin_id}")
+def admin_get(admin_id: int, session: DbSession) -> AdminPublic:
+    return AdminPublic.model_validate(accounts.find_admin(session, admin_id))
+
+
 @admin_router.delete("/admin/{admin_id}")
 def admin_delete(admin_id: int, session: DbSession, actor: Acting, at: Now) -> str:
     accounts.delete_admin(session, admin_id, actor=actor, now=at)
