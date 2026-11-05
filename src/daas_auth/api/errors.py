@@ -64,7 +64,7 @@ def refused_response(_: Request, error: Exception) -> JSONResponse:
     # app.py registers it for Refused only
     if not isinstance(error, Refused):
         raise error
-    return problem(error.status, error.detail)
+    return problem(error.status, error.detail, error.headers)
 
 
 def validation_error_response(_: Request, error: Exception) -> JSONResponse:

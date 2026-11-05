@@ -15,12 +15,17 @@ Refused is every other refusal (an unknown id, a duplicate email, ...);
 api/errors.py answers it as problem details.
 """
 
+from collections.abc import Mapping
+
 
 class Refused(Exception):
-    def __init__(self, status: int, detail: str) -> None:
+    def __init__(
+        self, status: int, detail: str, headers: Mapping[str, str] | None = None
+    ) -> None:
         super().__init__(detail)
         self.status = status
         self.detail = detail
+        self.headers = headers
 
 
 def refuse_unknown(wanted: list[int], known: set[int], what: str) -> None:

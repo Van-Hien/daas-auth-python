@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from daas_auth.domain.activity import Action, record
 from daas_auth.domain.emails import normalise_email
 from daas_auth.domain.passwords import hash_password, needs_rehash, verify_password
+from daas_auth.domain.throttle import refuse_if_throttled
 from daas_auth.domain.tokens import (
     SESSION_MAX,
     expiry,
@@ -300,6 +301,7 @@ def token_response(
 ) -> TokenResponse:
     """
     Every attempt, refused or not, writes one activity_log row.
+    Refused raises only for a throttled login; every other refusal is an OAuth answer.
     """
     validator = Validator(session, now)
     server = LegacyApplicationServer(
@@ -308,6 +310,10 @@ def token_response(
     path = urlsplit(uri)._replace(query="").geturl()
     # oauthlib's own parsing of the body, read here for the checks and the log row
     request = Request(path, "POST", body)
+    if request.grant_type == "password":
+        refuse_if_throttled(
+            session, email=_attempted_email(request), source_ip=source_ip, now=now
+        )
     try:
         if path != uri:
             # Credentials belong in the body, not in a URL that logs keep. Refused
@@ -335,6 +341,12 @@ def token_response(
         _log_refusal(session, action, validator, request, answer, now, source_ip)
     session.commit()  # a success: the token row, any rehash and the log row together
     return TokenResponse(headers, answer or "", status or 500)
+
+
+def _attempted_email(request: Request) -> str | None:
+    # A refresh has no username, and oauthlib's Request raises on a name it lacks.
+    email = normalise_email(getattr(request, "username", None) or "")
+    return email[:255] or None  # an attempt may be longer than the column
 
 
 def _log_success(
@@ -371,15 +383,13 @@ def _log_refusal(
             .where(OAuth2Token.family_id == family)
             .values(revoked_at=now, updated_at=now)
         )
-    # A refresh has no username, and oauthlib's Request raises on a name it lacks.
-    email = normalise_email(getattr(request, "username", None) or "")
     record(
         session,
         action,
         ok=False,
         now=now,
         reason=validator.reason or json.loads(answer or "{}").get("error"),
-        actor_email=email[:255] or None,  # an attempt may be longer than the column
+        actor_email=_attempted_email(request),
         source_ip=source_ip,
         details=None if family is None else f"family {family}",
     )

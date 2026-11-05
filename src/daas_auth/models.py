@@ -222,6 +222,7 @@ class ActivityLog(Audited, Base):
     __table_args__ = (
         Index("ix_activity_log_target_table", "target_table", "target_id"),
         Index("ix_activity_log_actor_email", "actor_email", "created_at"),
+        Index("ix_activity_log_source_ip", "source_ip", "created_at"),
         MYSQL,
     )
 
