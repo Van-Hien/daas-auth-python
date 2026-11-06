@@ -1,28 +1,44 @@
 # MariaDB for daas-auth. Same version as PHP's database, reachable only from this host.
 name: daas-auth     # container name: daas-auth-mariadb-1
 
+# Common DB settings, so the tests run on the settings the service runs on.
+x-mariadb: &mariadb
+  image: mariadb:10.11.6
+  env_file: .env.db    # the DB passwords; .env is for the service itself
+  environment:
+    MARIADB_DATABASE: daas_auth
+  command:
+    - --sql-mode=STRICT_ALL_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+    - --character-set-server=utf8mb4
+    - --collation-server=utf8mb4_bin
+    - --innodb-buffer-pool-size=32M   # cache cap: the data is under 1 MiB; the default 128M fills with undo pages
+  healthcheck:
+    test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+    interval: 5s
+    timeout: 5s
+    retries: 30
+
 services:
   mariadb:
-    image: mariadb:10.11.6
+    <<: *mariadb
     restart: unless-stopped
     ports:
       - "127.0.0.1:3318:3306"
-    env_file: .env.db    # the DB passwords; .env is for the service itself
-    environment:
-      MARIADB_DATABASE: daas_auth
-    command:
-      - --sql-mode=STRICT_ALL_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_bin
-      - --innodb-buffer-pool-size=32M   # cache cap: the data is under 1 MiB; the default 128M fills with undo pages
     volumes:
       - mariadb-data:/var/lib/mysql
       - ./docker/mariadb/initdb:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
+
+  # The tests' own database: make check starts it and removes it, so it costs no RAM
+  # at rest. Its data lives in memory and dies with it.
+  mariadb-test:
+    <<: *mariadb
+    profiles: [test]
+    ports:
+      - "127.0.0.1:3319:3306"
+    tmpfs:
+      - /var/lib/mysql
+    volumes:
+      - ./docker/mariadb/initdb:/docker-entrypoint-initdb.d:ro
 
 volumes:
   mariadb-data:

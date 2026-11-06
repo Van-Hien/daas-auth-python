@@ -15,8 +15,12 @@ gates=(
   "ruff|uv run ruff check"
   "format|uv run ruff format --check"
   "imports|uv run lint-imports"
-  "pytest|uv run pytest"
+  "pytest|DAAS_AUTH_REQUIRE_MARIADB=1 uv run pytest"
 )
+
+# The tests' own MariaDB lives only for this run. If it can't start, pytest fails.
+trap 'docker compose --profile test rm -fsv mariadb-test >/dev/null 2>&1' EXIT
+docker compose --profile test up -d --wait mariadb-test >/dev/null 2>&1
 
 summary=()
 failed=0

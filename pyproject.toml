@@ -63,7 +63,7 @@ addopts = ["-ra", "--import-mode=importlib"]
 strict = true
 # Labels for tests. With strict = true, an unregistered one is an error.
 markers = [
-    "mariadb: needs the MariaDB container (docker compose up -d); skipped when it is not running",
+    "mariadb: needs compose's mariadb-test; make check starts it, a single pytest run skips these without it",
 ]
 
 [tool.importlinter]

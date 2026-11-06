@@ -1,7 +1,9 @@
+import os
 import shutil
 from collections.abc import Callable, Iterator
 from datetime import datetime
 from pathlib import Path
+from typing import NoReturn
 from uuid import uuid4
 
 import pytest
@@ -22,21 +24,30 @@ from daas_auth.seed import seed_database
 
 # Tests use their own database, never daas_auth, so they can't touch real rows.
 TEST_DATABASE = "daas_auth_test"
+# compose.yaml's mariadb-test, which make check starts; never the service's database.
+TEST_PORT = 3319
 # The admin every API test starts with (made by daas-auth seed, so Argon2id).
 ADMIN_EMAIL = "admin@x.de"
 ADMIN_PASSWORD = "admin-pw-1"
 
 
+def no_mariadb(reason: str) -> NoReturn:
+    # A single pytest run may skip these tests. make check may not: it would pass
+    # without having looked at the system versioning or the grants.
+    if os.environ.get("DAAS_AUTH_REQUIRE_MARIADB"):
+        pytest.fail(reason)
+    pytest.skip(reason)
+
+
 def connect_test_database(database_url: str) -> Iterator[Connection]:
-    # Skipped, when the URL is not MariaDB or the container is not running.
     url = make_url(database_url)
     if url.get_backend_name() not in ("mysql", "mariadb"):
-        pytest.skip("not a MariaDB URL")
-    engine = make_engine(url.set(database=TEST_DATABASE))
+        no_mariadb("not a MariaDB URL")
+    engine = make_engine(url.set(database=TEST_DATABASE, port=TEST_PORT))
     try:
         connection = engine.connect()
     except OperationalError:
-        pytest.skip("MariaDB is not reachable: docker compose up -d")
+        no_mariadb("MariaDB is not reachable: docker compose up -d --wait mariadb-test")
     with connection:
         yield connection
     engine.dispose()
