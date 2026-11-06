@@ -7,8 +7,10 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from daas_auth.domain.activity import Action, record
 from daas_auth.models import OAuth2Token
 
 # Lifetimes
@@ -84,3 +86,27 @@ def save_pair(
         # the first row of a login names its family
         row.family_id = row.id
     return row
+
+
+def purge_tokens(session: Session, now: datetime) -> int:
+    """
+    Delete the rows of finished logins; the caller commits.
+
+    A row outlives its own expiry: a used refresh token must be recognised for as
+    long as its login can still hold a live pair. No login lasts past SESSION_MAX,
+    so a row that expired SESSION_MAX ago has no live relative left.
+    """
+    finished = OAuth2Token.refresh_expires_at < now - SESSION_MAX
+    count = session.execute(
+        select(func.count()).select_from(OAuth2Token).where(finished)
+    ).scalar_one()
+    session.execute(delete(OAuth2Token).where(finished))
+    record(
+        session,
+        Action.TOKEN_PURGE,
+        ok=True,
+        now=now,
+        target_table="oauth2_tokens",
+        details=f"{count} rows deleted",
+    )
+    return count

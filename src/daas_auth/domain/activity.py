@@ -17,6 +17,7 @@ class Action(StrEnum):
     # S105 takes TOKEN and PASSWORD in a name for a password; these are action names.
     LOGIN = "login"
     TOKEN_REFRESH = "token_refresh"  # noqa: S105
+    TOKEN_PURGE = "token_purge"  # noqa: S105
     PASSWORD_REHASH = "password_rehash"  # noqa: S105
     USER_CREATE = "user_create"
     USER_UPDATE = "user_update"

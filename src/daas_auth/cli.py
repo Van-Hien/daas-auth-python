@@ -2,6 +2,7 @@
 The service's own commands: `uv run daas-auth --help`.
 """
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 import typer
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from daas_auth.config import load_import_settings, load_settings
 from daas_auth.db import make_engine
+from daas_auth.domain.tokens import purge_tokens
 from daas_auth.php_import import ImportRefused, import_php
 from daas_auth.seed import SeedRefused, seed_database
 
@@ -57,3 +59,13 @@ def seed(
         typer.echo(f"Refused, nothing written: {refused}", err=True)
         raise typer.Exit(1) from None
     typer.echo(f"admin {admin_id} and test-client created")
+
+
+@app.command("purge-tokens")
+def purge_tokens_command() -> None:
+    """Delete the token rows of finished logins. Safe to run at any time."""
+    engine = make_engine(load_settings().database_url)
+    with Session(engine) as session:
+        count = purge_tokens(session, datetime.now(UTC).replace(tzinfo=None))
+        session.commit()
+    typer.echo(f"{count} token rows deleted")
