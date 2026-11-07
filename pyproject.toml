@@ -33,6 +33,7 @@ dev = [
     "httpx2>=2.16.0",
     "import-linter>=2.15",
     "mypy>=2.4.0",
+    "pip-audit>=2.9.0",
     "pytest>=9.1.1",
     "ruff>=0.17.2",
     "types-oauthlib>=4.0.0",

@@ -10,12 +10,17 @@ else
   green='' red='' reset=''
 fi
 
+# pip-audit gate: §11.1 of WHY-REWRITE.md measured 33 open advisories in PHP's locked
+# dependency set because no recurring audit gate existed. This gate turns the audit
+# from a one-time snapshot into a commit-blocking check so the Python rewrite cannot
+# drift the same way.
 gates=(
   "mypy|uv run mypy src tests"
   "ruff|uv run ruff check"
   "format|uv run ruff format --check"
   "imports|uv run lint-imports"
   "pytest|DAAS_AUTH_REQUIRE_MARIADB=1 uv run pytest"
+  "pip-audit|uv run pip-audit"
 )
 
 # The tests' own MariaDB lives only for this run. If it can't start, pytest fails.
