@@ -138,7 +138,7 @@ def update_user(
         user.email = normalise_email(email)
     if password is not None:
         user.password = hash_password(password)
-        _revoke_tokens(session, user.id, actor, now)
+        _revoke_user_tokens(session, user.id, actor, now)
     if groups is not None:
         links.replace(
             session,
@@ -228,7 +228,9 @@ def _delete_account(
     log_change(session, action, "users", account.id, actor, now)
 
 
-def _revoke_tokens(session: Session, user_id: int, actor: Actor, now: datetime) -> None:
+def _revoke_user_tokens(
+    session: Session, user_id: int, actor: Actor, now: datetime
+) -> None:
     session.execute(
         update(OAuth2Token)
         .where(OAuth2Token.user_id == user_id, OAuth2Token.revoked_at.is_(None))
