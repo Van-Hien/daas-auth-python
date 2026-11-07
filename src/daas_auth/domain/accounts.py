@@ -12,7 +12,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from daas_auth.domain import links
-from daas_auth.domain.activity import Action, Actor, log_change, record, stamp
+from daas_auth.domain.activity import (
+    Action,
+    Actor,
+    RevokedReason,
+    log_change,
+    record,
+    stamp,
+)
 from daas_auth.domain.emails import normalise_email
 from daas_auth.domain.errors import Refused
 from daas_auth.domain.passwords import hash_password
@@ -234,5 +241,10 @@ def _revoke_user_tokens(
     session.execute(
         update(OAuth2Token)
         .where(OAuth2Token.user_id == user_id, OAuth2Token.revoked_at.is_(None))
-        .values(revoked_at=now, updated_at=now, updated_by=actor.id)
+        .values(
+            revoked_at=now,
+            updated_at=now,
+            updated_by=actor.id,
+            revoked_reason=RevokedReason.PASSWORD_CHANGED,
+        )
     )

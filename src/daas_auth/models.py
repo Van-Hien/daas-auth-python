@@ -211,6 +211,7 @@ class OAuth2Token(Audited, Base):
     refresh_token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     refresh_expires_at: Mapped[datetime] = mapped_column(TIMESTAMP)
     revoked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    revoked_reason: Mapped[str | None] = mapped_column(String(16))
 
 
 class ActivityLog(Audited, Base):

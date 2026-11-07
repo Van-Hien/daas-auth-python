@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -7,6 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from daas_auth.api.dependencies import now
+from daas_auth.domain.passwords import hash_password
 from daas_auth.models import ActivityLog, OAuth2Client, OAuth2Token, UserRole
 
 URL = "/oauth2/user/token"
@@ -22,6 +24,13 @@ def login(client: TestClient, admin_login: dict[str, str]) -> dict[str, Any]:
     assert response.status_code == 200
     body: dict[str, Any] = response.json()
     return body
+
+
+def logout(client: TestClient, token: str) -> int:
+    # drives the Step-1 revoke route the frontend's logout hits
+    return client.post(
+        "/oauth2/user/revoke", data={"token": token, "client_id": "test-client"}
+    ).status_code
 
 
 def refresh(client: TestClient, token: str, **changes: str) -> dict[str, Any]:
@@ -156,3 +165,45 @@ def test_no_token_of_a_login_outlives_the_session(
     )
     at(app, session_end)
     assert refresh(client, last["refresh_token"]) == {"error": "invalid_grant"}
+
+
+def test_a_refresh_after_logout_is_revoked_not_reused(
+    app: FastAPI, client: TestClient, admin_login: dict[str, str]
+) -> None:
+    first = login(client, admin_login)  # one login, one family
+    assert (
+        logout(client, first["access_token"]) == 200
+    )  # ends the login (reason "logout")
+    assert refresh(client, first["refresh_token"]) == {"error": "invalid_grant"}
+    assert last_log(app).reason == "revoked"  # NOT "reused": no false theft row
+    with Session(app.state.engine) as session:
+        reasons = {r.revoked_reason for r in session.scalars(select(OAuth2Token)).all()}
+    assert reasons == {"logout"}  # family was not re-killed into "reused"
+
+
+def test_a_refresh_after_a_password_change_is_revoked_not_reused(
+    app: FastAPI,
+    client: TestClient,
+    admin: dict[str, str],
+    add_user: Callable[..., int],
+) -> None:
+    anna = add_user("anna@x.de", hash_password("anna-pw-1"))  # a plain user
+    form = {
+        "grant_type": "password",
+        "username": "anna@x.de",
+        "password": "anna-pw-1",
+        "client_id": "test-client",
+        "scope": "user",
+    }
+    pair = client.post(URL, data=form).json()  # her login pair
+    changed = client.patch(
+        f"/user/{anna}", json={"password": "another-long-pw-2"}, headers=admin
+    )
+    assert changed.status_code == 200  # revokes her tokens ("password changed")
+    assert refresh(client, pair["refresh_token"], scope="user") == {
+        "error": "invalid_grant"
+    }
+    assert last_log(app).reason == "revoked"  # NOT "reused"
+    with Session(app.state.engine) as session:
+        reasons = {r.revoked_reason for r in session.scalars(select(OAuth2Token)).all()}
+    assert "reused" not in reasons  # no false theft row

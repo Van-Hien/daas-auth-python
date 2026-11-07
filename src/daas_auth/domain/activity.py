@@ -5,7 +5,7 @@ The service only ever inserts into activity_log, through record().
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum, StrEnum
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -37,6 +37,13 @@ class Action(StrEnum):
     DESKTOP_GROUP_CREATE = "desktop_group_create"
     DESKTOP_GROUP_DELETE = "desktop_group_delete"
     DESKTOP_GROUP_UPDATE = "desktop_group_update"
+
+
+class RevokedReason(str, Enum):
+    ROTATED = "rotated"
+    LOGOUT = "logout"
+    REUSED = "reused"
+    PASSWORD_CHANGED = "password changed"  # noqa: S105
 
 
 def record(

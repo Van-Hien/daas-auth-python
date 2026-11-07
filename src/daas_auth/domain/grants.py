@@ -29,7 +29,7 @@ from oauthlib.oauth2.rfc6749.errors import (
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
-from daas_auth.domain.activity import Action, record
+from daas_auth.domain.activity import Action, RevokedReason, record
 from daas_auth.domain.emails import normalise_email
 from daas_auth.domain.passwords import hash_password, needs_rehash, verify_password
 from daas_auth.domain.throttle import refuse_if_throttled
@@ -225,9 +225,12 @@ class Validator(RequestValidator):
         if row.client_id != client.client_id:
             return self._refuse("other_client")
         if row.revoked_at is not None:
-            # Already used: someone holds a copy. The family dies after the rollback.
-            self.reused_family = row.family_id
-            return self._refuse("reused")
+            if row.revoked_reason == RevokedReason.ROTATED:
+                # Already used: someone holds a copy. The family dies after the rollback.
+                self.reused_family = row.family_id
+                return self._refuse(RevokedReason.REUSED)
+            # logged out / changed password -> revoke, but no theft
+            return self._refuse("revoked")
         if row.refresh_expires_at <= self.now:
             return self._refuse("expired")
         user = self.session.get_one(User, row.user_id)
@@ -273,6 +276,7 @@ class Validator(RequestValidator):
             # One row holds the pair, so this also kills the old access token.
             self.old.revoked_at = self.now
             self.old.updated_at = self.now
+            self.old.revoked_reason = RevokedReason.ROTATED
             family_id = self.old.family_id
         refresh_token = token.get("refresh_token")
         if refresh_token is None:  # oauthlib adds it whenever the grant issues one
@@ -330,6 +334,7 @@ class Validator(RequestValidator):
             pair.revoked_at = self.now
             pair.updated_at = self.now
             pair.updated_by = pair.user_id
+            pair.revoked_reason = RevokedReason.LOGOUT
         if live:
             self.user = self.session.get_one(User, row.user_id)
 
@@ -455,7 +460,7 @@ def _log_refusal(
         session.execute(
             update(OAuth2Token)
             .where(OAuth2Token.family_id == family)
-            .values(revoked_at=now, updated_at=now)
+            .values(revoked_at=now, updated_at=now, revoked_reason=RevokedReason.REUSED)
         )
     record(
         session,
