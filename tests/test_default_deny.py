@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 # The only routes anyone may call without a token. A new public route goes here.
 PUBLIC = {
     ("GET", "/health"),
+    ("POST", "/oauth2/user/revoke"),
     ("POST", "/oauth2/user/token"),
     ("POST", "/user/validate_email"),
 }

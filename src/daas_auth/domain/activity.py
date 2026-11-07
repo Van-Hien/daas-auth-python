@@ -16,6 +16,7 @@ from daas_auth.models import ActivityLog
 class Action(StrEnum):
     # S105 takes TOKEN and PASSWORD in a name for a password; these are action names.
     LOGIN = "login"
+    LOGOUT = "logout"
     TOKEN_REFRESH = "token_refresh"  # noqa: S105
     TOKEN_PURGE = "token_purge"  # noqa: S105
     PASSWORD_REHASH = "password_rehash"  # noqa: S105

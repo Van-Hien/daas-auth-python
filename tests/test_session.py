@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from datetime import datetime, timedelta
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx2 import Response
@@ -132,3 +133,14 @@ def test_a_route_refuses_a_token_without_its_scope(
     )
     body = {"error": "insufficient_scope", "error_description": description}
     assert refusal(response) == (403, challenge, body | {"scope": "user"})
+
+
+def test_a_refused_bearer_is_logged_without_the_token(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    token = "not-a-real-token"
+    headers = {"Authorization": f"Bearer {token}"}
+    with caplog.at_level("WARNING", logger="daas_auth.domain.bearer"):
+        assert client.get("/oauth2/user/session", headers=headers).status_code == 401
+    assert "bearer refused: unknown" in caplog.text
+    assert token not in caplog.text

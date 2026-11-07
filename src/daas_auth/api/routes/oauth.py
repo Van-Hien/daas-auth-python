@@ -8,7 +8,7 @@ from anyio.to_thread import run_sync
 from fastapi import APIRouter, Depends, Request, Response
 
 from daas_auth.api.dependencies import AuthCaller, DbSession, Now, require_scope
-from daas_auth.domain.grants import token_response
+from daas_auth.domain.grants import revocation_response, token_response
 
 public_router = APIRouter()  # the login itself can't need a token
 router = APIRouter()  # app.py adds the bearer check to every route here
@@ -44,6 +44,18 @@ async def token(
     )
     answer = await run_sync(run, limiter=_HASHING)
 
+    return Response(answer.body, answer.status, answer.headers)
+
+
+@public_router.post("/oauth2/user/revoke")
+def revoke(body: RawBody, request: Request, session: DbSession, at: Now) -> Response:
+    """
+    The frontend's logout. The token in the body is the proof, so no bearer.
+    """
+    source_ip = request.client.host if request.client else None
+    answer = revocation_response(
+        session, uri=str(request.url), body=body, now=at, source_ip=source_ip
+    )
     return Response(answer.body, answer.status, answer.headers)
 
 

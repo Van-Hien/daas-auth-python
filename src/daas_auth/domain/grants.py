@@ -14,7 +14,11 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from oauthlib.common import Request
-from oauthlib.oauth2 import LegacyApplicationServer, RequestValidator
+from oauthlib.oauth2 import (
+    LegacyApplicationServer,
+    RequestValidator,
+    RevocationEndpoint,
+)
 from oauthlib.oauth2.rfc6749.errors import (
     InvalidGrantError,
     InvalidRequestError,
@@ -22,7 +26,7 @@ from oauthlib.oauth2.rfc6749.errors import (
     OAuth2Error,
     UnsupportedGrantTypeError,
 )
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from daas_auth.domain.activity import Action, record
@@ -285,6 +289,50 @@ class Validator(RequestValidator):
             expires=expiry(self.now, self.session_ends),
         )
 
+    # ---- logging out -------------------------------------------------------
+
+    def revoke_token(
+        self,
+        token: str,
+        token_type_hint: str
+        | None,  # "refresh_token" | "access_token" | "nonsense" | None
+        request: Request,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        # The hint may be wrong, so both columns are searched.
+        # No lock on this OR on MariaDB it deadlocked with a running refresh.
+        digest = hash_token(token)
+        row = self.session.scalars(
+            select(OAuth2Token).where(
+                or_(
+                    OAuth2Token.access_token_hash == digest,
+                    OAuth2Token.refresh_token_hash == digest,
+                )
+            )
+        ).one_or_none()
+        if row is None or row.client_id != self.client_id:
+            return
+        # Wait until a running refresh of this pair is finished
+        # Then FOR UPDATE reads what it commited, so a pair issued a moment ago dies too.
+        self.session.execute(
+            select(OAuth2Token.id).where(OAuth2Token.id == row.id).with_for_update()
+        )
+        live = self.session.scalars(
+            select(OAuth2Token)
+            .where(
+                OAuth2Token.family_id == row.family_id,
+                OAuth2Token.revoked_at.is_(None),
+            )
+            .with_for_update()
+        ).all()
+        for pair in live:
+            pair.revoked_at = self.now
+            pair.updated_at = self.now
+            pair.updated_by = pair.user_id
+        if live:
+            self.user = self.session.get_one(User, row.user_id)
+
 
 @dataclass(frozen=True)
 class TokenResponse:
@@ -340,6 +388,32 @@ def token_response(
     else:
         _log_refusal(session, action, validator, request, answer, now, source_ip)
     session.commit()  # a success: the token row, any rehash and the log row together
+    return TokenResponse(headers, answer or "", status or 500)
+
+
+def revocation_response(
+    session: Session, *, uri: str, body: str, now: datetime, source_ip: str | None
+) -> TokenResponse:
+    """
+    Log out: revoke the token in the body, and with it the whole login it
+    belongs to, not just that one pair.
+
+    An unknown or already-revoked token still gets 200: an error gives the
+    client nothing to act on, and the token no longer works either way. A row
+    is written to activity_log only when a live login was really ended, so a
+    stream of made-up tokens cannot pad the table.
+    """
+    path = urlsplit(uri)._replace(query="").geturl()
+    if path != uri:  # oauthlib's parser raises ValueError on a malformed query
+        error = InvalidRequestError("URL query parameters are not allowed")
+        headers = {"Content-Type": "application/json"}
+        return TokenResponse(headers, error.json, error.status_code)
+    validator = Validator(session, now)
+    server = RevocationEndpoint(validator)
+    headers, answer, status = server.create_revocation_response(path, "POST", body)
+    if validator.user is not None:
+        _log_success(session, Action.LOGOUT, validator.user, now, source_ip)
+    session.commit()
     return TokenResponse(headers, answer or "", status or 500)
 
 
