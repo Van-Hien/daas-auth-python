@@ -39,6 +39,13 @@ services:
       - /var/lib/mysql
     volumes:
       - ./docker/mariadb/initdb:/docker-entrypoint-initdb.d:ro
+    # Checked every second: the test DB starts empty on every run, and make check
+    # waits for "healthy" before the first gate.
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 1s
+      timeout: 5s
+      retries: 60
 
 volumes:
   mariadb-data:
