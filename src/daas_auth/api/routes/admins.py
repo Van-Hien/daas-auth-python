@@ -1,7 +1,13 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
-from daas_auth.api.dependencies import Acting, DbSession, Now, require_scope
+from daas_auth.api.dependencies import (
+    Acting,
+    BreachCheck,
+    DbSession,
+    Now,
+    require_scope,
+)
 from daas_auth.api.schemas import AdminCreate, AdminPublic
 from daas_auth.domain import accounts
 from daas_auth.domain.accounts import ADMINS
@@ -12,7 +18,11 @@ admin_router = APIRouter(dependencies=[Depends(require_scope("admin"))])
 
 @admin_router.post("/admin")
 def admin_create(
-    body: AdminCreate, session: DbSession, actor: Acting, at: Now
+    body: AdminCreate,
+    session: DbSession,
+    actor: Acting,
+    at: Now,
+    check_breaches: BreachCheck,
 ) -> AdminPublic:
     admin = accounts.create_account(
         session,
@@ -21,6 +31,7 @@ def admin_create(
         password=body.password,
         role="admin",
         groups=[],
+        check_breaches=check_breaches,
         actor=actor,
         now=at,
     )

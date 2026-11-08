@@ -7,7 +7,13 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
-from daas_auth.api.dependencies import Acting, DbSession, Now, require_scope
+from daas_auth.api.dependencies import (
+    Acting,
+    BreachCheck,
+    DbSession,
+    Now,
+    require_scope,
+)
 from daas_auth.api.schemas import (
     AdminPublic,
     Message,
@@ -56,7 +62,11 @@ def user_get(user_id: int, session: DbSession) -> AdminPublic | UserPublic:
 
 @admin_router.post("/user")
 def user_create(
-    body: UserCreate, session: DbSession, actor: Acting, at: Now
+    body: UserCreate,
+    session: DbSession,
+    actor: Acting,
+    at: Now,
+    check_breaches: BreachCheck,
 ) -> UserPublic:
     """
     The admin dashboard's Create an account. Admin only, unlike PHP; it starts disabled.
@@ -68,6 +78,7 @@ def user_create(
         password=body.password,
         role="user",
         groups=body.groups,
+        check_breaches=check_breaches,
         actor=actor,
         now=at,
     )
@@ -77,7 +88,12 @@ def user_create(
 
 @admin_router.patch("/user/{user_id}")
 def user_update(
-    user_id: int, body: UserUpdate, session: DbSession, actor: Acting, at: Now
+    user_id: int,
+    body: UserUpdate,
+    session: DbSession,
+    actor: Acting,
+    at: Now,
+    check_breaches: BreachCheck,
 ) -> Message:
     """
     PHP's answer: only a message, unlike enable and disable.
@@ -89,6 +105,7 @@ def user_update(
         email=body.email,
         password=body.password,
         groups=body.groups,
+        check_breaches=check_breaches,
         actor=actor,
         now=at,
     )

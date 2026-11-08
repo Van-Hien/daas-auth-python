@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from daas_auth.api.app import create_app
 from daas_auth.config import Settings, load_migration_settings, load_settings
 from daas_auth.db import make_engine
+from daas_auth.domain import passwords
 from daas_auth.models import Role, User, UserRole
 from daas_auth.seed import seed_database
 
@@ -51,6 +52,15 @@ def connect_test_database(database_url: str) -> Iterator[Connection]:
     with connection:
         yield connection
     engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def no_pwned_passwords(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    No test asks Have I Been Pwned: every range comes back empty.
+    A test that needs another answer sets _fetch_range again.
+    """
+    monkeypatch.setattr(passwords, "_fetch_range", lambda prefix: "")
 
 
 # ---- MariaDB ---------------------------------------------

@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # DAAS_AUTH_CORS_ORIGINS='["https://front1.cluster.local:8443"]'
     cors_origins: list[str] = ["https://front1.cluster.local:8443"]
 
+    # A new password is looked up in Have I Been Pwned; 5 hex characters leave the host.
+    # false on a host without internet access: then only the local checks run.
+    check_pwned_passwords: bool = True
+
 
 def load_settings() -> Settings:
     # mypy sees database_url as a missing argument,

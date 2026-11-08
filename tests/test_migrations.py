@@ -326,6 +326,7 @@ def test_group_links_keep_who_removed_them(migrated: None, mariadb: Connection) 
             password="a-long-enough-pw",
             role="user",
             groups=[7],
+            check_breaches=False,
             actor=Actor(99, "admin@x.de", None),
             now=now,
         )
@@ -337,6 +338,7 @@ def test_group_links_keep_who_removed_them(migrated: None, mariadb: Connection) 
             email=None,
             password=None,
             groups=[],
+            check_breaches=False,
             actor=Actor(98, "other@x.de", None),
             now=now,
         )

@@ -29,6 +29,14 @@ DbSession = Annotated[Session, Depends(get_session)]
 Now = Annotated[datetime, Depends(now)]
 
 
+def breach_check(request: Request) -> bool:
+    # Settings.check_pwned_passwords, read once at startup.
+    return bool(request.app.state.settings.check_pwned_passwords)
+
+
+BreachCheck = Annotated[bool, Depends(breach_check)]
+
+
 def authenticated(request: Request, session: DbSession, at: Now) -> Caller:
     return authenticate(session, request.headers.get("Authorization"), at)
 

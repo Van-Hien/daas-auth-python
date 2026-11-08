@@ -22,7 +22,7 @@ from daas_auth.domain.activity import (
 )
 from daas_auth.domain.emails import normalise_email
 from daas_auth.domain.errors import Refused
-from daas_auth.domain.passwords import hash_password
+from daas_auth.domain.passwords import hash_password, refuse_weak_password
 from daas_auth.domain.user_groups import known_user_groups
 from daas_auth.models import (
     OAuth2Token,
@@ -91,6 +91,7 @@ def create_account(
     password: str,
     role: str,
     groups: list[int],
+    check_breaches: bool,
     actor: Actor,
     now: datetime,
 ) -> User:
@@ -98,6 +99,9 @@ def create_account(
     A user starts disabled and waits for an admin; an admin starts enabled, as in PHP.
     """
     groups = known_user_groups(session, groups)
+    refuse_weak_password(
+        password, name=name, email=email, check_breaches=check_breaches
+    )
     account = User(
         guid=str(uuid4()),
         name=name,
@@ -132,6 +136,7 @@ def update_user(
     email: str | None,
     password: str | None,
     groups: list[int] | None,
+    check_breaches: bool,
     actor: Actor,
     now: datetime,
 ) -> User:
@@ -144,6 +149,10 @@ def update_user(
     if email is not None:
         user.email = normalise_email(email)
     if password is not None:
+        # After name and email: the password is checked against the new ones.
+        refuse_weak_password(
+            password, name=user.name, email=user.email, check_breaches=check_breaches
+        )
         user.password = hash_password(password)
         _revoke_user_tokens(session, user.id, actor, now)
     if groups is not None:
