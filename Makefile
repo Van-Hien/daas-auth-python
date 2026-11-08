@@ -2,7 +2,7 @@
 # Recipe lines start with a TAB, not spaces.
 .PHONY: check fmt
 
-check: ## run all five gates, then print a summary; fails if any gate failed
+check: ## run all six gates, then print a summary; fails if any gate failed
 	@bash scripts/check.sh
 
 
