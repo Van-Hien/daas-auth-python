@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import anyio
 from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,7 +27,12 @@ from daas_auth.api.routes import (
     without_mail,
 )
 from daas_auth.config import Settings, load_settings
-from daas_auth.db import check_strict_mode, enforce_foreign_keys, make_engine
+from daas_auth.db import (
+    DB_CONNECTIONS,
+    check_strict_mode,
+    enforce_foreign_keys,
+    make_engine,
+)
 from daas_auth.domain.errors import BearerError, Refused
 
 
@@ -56,6 +62,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.engine = engine
+    # One slot per pooled connection; get_session takes one per request.
+    app.state.db_slots = anyio.CapacityLimiter(DB_CONNECTIONS)
     app.add_exception_handler(BearerError, bearer_error_response)
     app.add_exception_handler(Refused, refused_response)
     app.add_exception_handler(HTTPException, http_error_response)

@@ -2,7 +2,7 @@
 What a route asks for to get a database session, the time and the caller.
 """
 
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -14,10 +14,22 @@ from daas_auth.domain.bearer import Caller, authenticate
 from daas_auth.domain.errors import insufficient_scope
 
 
-def get_session(request: Request) -> Iterator[Session]:
-    # One session per request, closed afterwards; it commits only if a route says so.
-    with Session(request.app.state.engine) as session:
-        yield session
+async def get_session(request: Request) -> AsyncIterator[Session]:
+    """
+    One session per request, closed afterwards; it commits only if a route says so.
+
+    The slot is taken here, in the event loop, before any worker thread asks the
+    pool for a connection. At most as many requests hold a session as the pool has
+    connections, so no worker thread ever waits for one. Without the slot, threads
+    waiting for a connection can block the requests that hold one, until the pool
+    gives up after 30 s (tests/test_pool.py).
+
+    Because this function is async, closing the session also runs in the event loop:
+    returning the connection is one short round trip to the local database.
+    """
+    async with request.app.state.db_slots:
+        with Session(request.app.state.engine) as session:
+            yield session
 
 
 def now() -> datetime:
