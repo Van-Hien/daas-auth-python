@@ -1,6 +1,6 @@
 [project]
 name = "daas-auth"
-version = "1.0.0"
+version = "1.0.1"
 description = "OAuth2 auth service for DESIGN DaaS, drop-in replacement for the PHP backend"
 readme = "README.md"
 authors = [
