@@ -3,6 +3,8 @@ name = "daas-auth"
 version = "1.0.1"
 description = "OAuth2 auth service for DESIGN DaaS, drop-in replacement for the PHP backend"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Van-Hien", email = "hien.van.986@gmail.com" }
 ]
