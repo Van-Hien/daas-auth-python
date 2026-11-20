@@ -27,8 +27,8 @@ daas-auth is an HTTP service on `127.0.0.1:5003`. It keeps the paths, status cod
 
 To run the whole platform, you also need the two companion repositories, cloned next to this one:
 
-- `design-daas`: the orchestrator (Quart). It logs in as the admin and validates user tokens against this service.
-- `design-daas-application-frontend`: the React UI. Its origin must be listed in `DAAS_AUTH_CORS_ORIGINS`.
+- [`design-daas`](https://github.com/Van-Hien/design-daas): the orchestrator (Quart). It logs in as the admin and validates user tokens against this service.
+- [`design-daas-application-frontend`](https://github.com/Van-Hien/design-daas-application-frontend): the React UI. Its origin must be listed in `DAAS_AUTH_CORS_ORIGINS`.
 
 ## Installation
 
@@ -138,3 +138,7 @@ docker compose --profile test rm -fsv mariadb-test
 Layering is enforced by `make check`: `domain/` must not import `api/`, and route modules must not import each other. SQL built from strings is rejected by the linter, so use the ORM only.
 
 **Warning:** `docker compose down -v` deletes the live database (users, tokens, history). Plain `down` keeps it.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
